@@ -12,11 +12,15 @@ class MusicData(Dataset):
     
         # Encoding string labels to integers
         if isinstance(y[0], str):
+            print("Encoding labels")
             le = LabelEncoder()
             y = le.fit_transform(y)
         
         self.X = torch.tensor(X, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.long)
+        
+        print(f"X shape: {self.X.shape}")
+        print(f"y shape: {self.y.shape}")
         
         
     def __len__(self):

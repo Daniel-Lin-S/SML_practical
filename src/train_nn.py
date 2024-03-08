@@ -31,6 +31,9 @@ def train(model, train_loader, optimizer, loss_function, device='mps'):
         optimizer.zero_grad()
         output = model(data)
         loss = loss_function(output, target)
+        
+        # logging.info(f"Loss: {loss.item()}")
+        
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
@@ -134,7 +137,7 @@ def run_training_loop(num_epochs,
         val_loss, val_acc = validate(model, val_loader, loss_function, device)
         
         if verbose and epoch % 5 == 0:
-            logging.info(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc:.4f}')
+            logging.info(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
             
             if val_loss < best_val_loss:
                 logging.info("Saving model...")
