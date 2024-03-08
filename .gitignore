@@ -1,1 +1,6 @@
 *.csv
+src/__pycache__/
+*.pyc
+logs/
+models/
+*.DS_Store
