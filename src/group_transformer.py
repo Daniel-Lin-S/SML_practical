@@ -16,9 +16,9 @@ class GroupedFeaturesTransformer(nn.Module):
         dropout=0.1,
     ):
         """
-        Model insipired by Vit (Dosovitskiy et al., 2021) for tabular data.  
+        Model insipired by Vit (Dosovitskiy et al., 2021) for tabular data.
 
-        Args:  
+        Args:
             - n_groups (int): Number of feature groups.
             - n_features_per_group (list): Number of features in each group.
             - n_hidden (int): Dimensionality of the hidden layer.
@@ -35,7 +35,7 @@ class GroupedFeaturesTransformer(nn.Module):
         self.embeddings = nn.ModuleList(
             [nn.Linear(n_features, n_hidden) for n_features in n_features_per_group]
         )
-        
+
         self.n_feat_group = [0] + np.cumsum(n_features_per_group).tolist()
         # print(self.n_feat_group)
 
@@ -44,9 +44,13 @@ class GroupedFeaturesTransformer(nn.Module):
         )
 
         encoder_layer = TransformerEncoderLayer(
-            d_model=n_hidden, nhead=n_heads, dropout=dropout
+            d_model=n_hidden,
+            nhead=n_heads,
+            dropout=dropout,
+            dim_feedforward=128,
+            batch_first=True,
         )
-        
+
         self.transformer_encoder = TransformerEncoder(
             encoder_layer=encoder_layer, num_layers=n_encoder_layers
         )
@@ -59,18 +63,18 @@ class GroupedFeaturesTransformer(nn.Module):
         self.classifier = nn.Linear(n_hidden, n_classes)
 
     def forward(self, x):
-        batch_size = x.size(0)
-        
+        batch_size = x.shape[0]
+
         x_embedded = []
-        
+
         for i, (embedding, norm) in enumerate(zip(self.embeddings, self.layer_norms)):
             group = x[:, self.n_feat_group[i] : self.n_feat_group[i + 1]]
             # print(group.shape)
-            
+
             embedded_group = embedding(group.reshape(batch_size, -1))
-            
+
             normed_group = norm(embedded_group)
-            
+
             x_embedded.append(normed_group)
 
         x = torch.stack(x_embedded, dim=1)
@@ -81,6 +85,7 @@ class GroupedFeaturesTransformer(nn.Module):
 
         # Apply global average pooling across all groups
         x = x.permute(1, 2, 0)  # [batch_size, embedding_dim, seq_len]
+        
         x = self.global_pooling(x).squeeze(-1)  # [batch_size, embedding_dim]
 
         # Classifier

@@ -136,9 +136,9 @@ def run_training_loop(num_epochs,
         train_loss = train(model, train_loader, optimizer, loss_function, device)
         val_loss, val_acc = validate(model, val_loader, loss_function, device)
         
-        if verbose and epoch % 5 == 0:
+        if verbose and epoch % 10 == 0:
             logging.info(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
-            print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
+            # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
             if val_loss < best_val_loss:
                 logging.info("Saving model...")
                 torch.save(model.state_dict(), os.path.join(save_path, model_name))
