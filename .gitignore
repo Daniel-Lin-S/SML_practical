@@ -6,3 +6,4 @@ models/
 *.DS_Store
 notebooks/wang.ipynb
 notebooks/wang2.ipynb
+reports/
