@@ -1,4 +1,4 @@
-"""Custom dataloader for the dataset."""
+"""Custom dataloader for torch."""
 
 import torch
 from torch.utils.data import Dataset, DataLoader

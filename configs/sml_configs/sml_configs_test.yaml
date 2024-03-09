@@ -1,0 +1,4 @@
+l_svm:
+  alpha: 0.001
+  loss: squared_hinge
+  penalty: l1
