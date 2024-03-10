@@ -23,7 +23,7 @@ TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
 
 
 # constants for methods
-METHOD_FOR_REDUCE = "PCA"
+METHOD_FOR_REDUCE = "PCA" # None
 N_COMPONENTS = 10
 
 # this to pass to the method in grid search
@@ -61,6 +61,13 @@ def main():
         type=bool,
         default=False,
         help="Whether or not to reduce the dimensionality of the data",
+    )
+    
+    parser.add_argument(
+        "--scaling_method",
+        type=str,
+        default="standard",
+        help="The type of scaler to use (standard, minmax)",
     )
 
     parser.add_argument(
@@ -107,14 +114,12 @@ def main():
         shuffle=args.shuffle,
     )
 
-    if not args.reduce:
-        # split the data
-        X_train, X_test, y_train, y_test = dataset.split_data()
-    else:
-        # reduce the dimensionality of the data
-        X_train, X_test, y_train, y_test = dataset.reduce_dimensions(
-            method=METHOD_FOR_REDUCE, n_components=N_COMPONENTS
-        )
+    # split the data
+    X_train, X_test, y_train, y_test = dataset.get_data(
+        scaler=args.scaling_method,
+        reduction_method=METHOD_FOR_REDUCE,
+        n_components=N_COMPONENTS,
+    )
 
     
     best_params = {}
