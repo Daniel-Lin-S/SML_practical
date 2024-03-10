@@ -1,0 +1,44 @@
+mlp:
+  activation: relu
+  dropout: 0.0
+  hidden_dims:
+  - 16
+  input_dim: 518
+  n_embed_dim: 8
+  n_features_per_group:
+  - 84
+  - 84
+  - 84
+  - 140
+  - 7
+  - 7
+  - 7
+  - 49
+  - 7
+  - 42
+  - 7
+  n_groups: 11
+  output_dim: 8
+  use_patch_embedding: false
+transformer:
+  dim_feedforward: 64
+  dropout: 0.0
+  input_dim: 518
+  n_embed_dim: 16
+  n_features_per_group:
+  - 84
+  - 84
+  - 84
+  - 140
+  - 7
+  - 7
+  - 7
+  - 49
+  - 7
+  - 42
+  - 7
+  n_groups: 11
+  n_heads: 2
+  num_layers: 1
+  output_dim: 8
+  use_patch_embedding: true
