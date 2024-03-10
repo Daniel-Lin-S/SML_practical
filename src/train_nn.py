@@ -1,4 +1,7 @@
+"""Training function for a simple neural network."""
+
 import os
+import argparse
 import logging
 import torch
 from sklearn.metrics import accuracy_score
@@ -91,20 +94,23 @@ def run_training_loop(num_epochs,
                       model_name='model.pth',
                       save_path=None,
                       device='mps',
-                      verbose=True):
+                      verbose=5):
     """
     Runs the training loop for a given number of epochs.
     Saves the trained model to a given path and writes logs to text files.
     
     Args:  
-        - num_epochs: Number of epochs to train for
+        - num_epochs (int): Number of epochs to train the model
         - train_loader: DataLoader for training data
         - val_loader: DataLoader for validation data
-        - model: Neural network model
+        - model: The neural network model
         - optimizer: Optimization algorithm in torch.optim
         - loss_function: Loss function
-        - save_path: Path to save the trained model
-        - verbose: Whether to print training progress 
+        - model_name (str): Name of the model file to save
+        - save_path (str): Path to save the model
+        - device (str): Device to perform computations
+        - verbose (int): Print training logs every `verbose` epochs,
+                        if is 0, no logs will be printed.
         
     Returns:  
         - list1: Training losses
@@ -136,7 +142,7 @@ def run_training_loop(num_epochs,
         train_loss = train(model, train_loader, optimizer, loss_function, device)
         val_loss, val_acc = validate(model, val_loader, loss_function, device)
         
-        if verbose and epoch % 10 == 0:
+        if verbose>0 and epoch % verbose == 0:
             logging.info(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
             # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
             if val_loss < best_val_loss:
