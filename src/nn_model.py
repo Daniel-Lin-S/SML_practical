@@ -363,7 +363,8 @@ class TransformerPredictor(nn.Module):
                                                   n_features_per_group = n_features_per_group,
                                                   n_embed_dim = n_embed_dim)
         else:
-            self.patch_embedding = None
+            # self.patch_embedding = None
+            raise NotImplementedError("Not implemented without patch embedding")
             
         model_dim = n_embed_dim
             
@@ -391,9 +392,9 @@ class TransformerPredictor(nn.Module):
         """
         if self.patch_embedding is not None:
             x = self.patch_embedding(x)
-        else:
+        # else:
             # treat the (batch, features) as (batch, seq, feature)
-            x = x.unsqueeze(1)
+            # x = x.unsqueeze(1)
         
         for layer in self.encoder:
             x = layer(x, mask=mask)
