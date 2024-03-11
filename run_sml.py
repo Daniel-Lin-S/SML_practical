@@ -7,34 +7,45 @@ import time
 import logging
 import argparse
 import warnings
+from packaging.version import Version
+
+import sklearn
+from sklearn.metrics import classification_report
+
 from src.data_utils import MusicDataset
 from src.sml_model import *
-from sklearn.metrics import classification_report
 
 # paths to the data
 PATH_to_X = "data/X_train.csv"
 PATH_to_y = "data/y_train.csv"
 
 PATH_to_config = "configs/sml_configs/sml_configs_train.yaml"
-PATH_to_output = "configs/sml_configs/sml_configs_test.yaml"
+# PATH_to_output = "configs/sml_configs/sml_configs_test.yaml"
 
 # get system time
 TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
 
 
 # constants for methods
-METHOD_FOR_REDUCE = "PCA" # None
-N_COMPONENTS = 10
+# METHOD_FOR_REDUCE = "PCA" # None
+# N_COMPONENTS = 10
 
 # this to pass to the method in grid search
 # e.g. adaboost = AdaBoostClassifier(base_estimator=DecisionTreeClassifier())
 # then use grid search to find the best parameters for the base estimator
 
-KWARGS_FOR_GRID_SEARCH = {
-    "l_svm": {"max_iter": 1},
-    "xgboost_rf": {"random_state": 42},
-    "adaboost": {"base_estimator": DecisionTreeClassifier()},
-}
+if Version(sklearn.__version__) < Version("1.2"):
+    KWARGS_FOR_GRID_SEARCH = {
+        "l_svm": {"max_iter": 1},
+        "xgboost_rf": {"random_state": 42},
+        "adaboost": {"base_estimator": DecisionTreeClassifier()},
+    }
+else:
+    KWARGS_FOR_GRID_SEARCH = {
+        "l_svm": {"max_iter": 1},
+        "xgboost_rf": {"random_state": 42},
+        "adaboost": {"estimator": DecisionTreeClassifier()},
+    }
 
 logging.basicConfig(
     level=os.environ.get("LOGLEVEL", "INFO"),
@@ -57,11 +68,26 @@ def main():
     # if the flag is not provided, then the default value is False
     # if the flag is provided, then the value is True
     parser.add_argument(
-        "--reduce",
-        type=bool,
-        default=False,
-        help="Whether or not to reduce the dimensionality of the data",
+        "--reduce_method",
+        type=str,
+        default="pca",
+        help="The method to reduce the dimensionality of the data",
     )
+    
+    parser.add_argument(
+        "--n_components",
+        type=int,
+        default=7,
+        help="The number of components to reduce the data to",
+    )
+    
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="configs/sml_configs/sml_configs_test.yaml",
+        help="The directory to save the best parameters to",
+    )
+        
     
     parser.add_argument(
         "--scaling_method",
@@ -113,12 +139,20 @@ def main():
         random_state=args.random_state,
         shuffle=args.shuffle,
     )
+    
+    reduction_method = args.reduce_method
+    if reduction_method == "lda":
+        assert args.n_components <= 7, "The number of components for LDA must be less than or equal to 7"
 
+    
+    if reduction_method == "none":
+        reduction_method = None
+    
     # split the data
     X_train, X_test, y_train, y_test = dataset.get_data(
         scaler=args.scaling_method,
-        reduction_method=METHOD_FOR_REDUCE,
-        n_components=N_COMPONENTS,
+        reduction_method=reduction_method,
+        n_components=args.n_components,
     )
 
     
@@ -141,7 +175,7 @@ def main():
         best_model = grid_search_cv(
             model_name,
             params_config,
-            PATH_to_output,
+            args.output_dir,
             X_train,
             y_train,
             cv=args.cv,
@@ -160,7 +194,7 @@ def main():
         if not os.path.exists("reports"):
             os.makedirs("reports")
             
-        with open(f"reports/Experiment_{TIME}.txt", "w") as file:
+        with open(f"reports/Experiment_{model_name}_{TIME}.txt", "w") as file:
             file.write(f"Model: {model_name}\n")
             file.write(report)
             file.write("\n")
@@ -169,10 +203,10 @@ def main():
             # some separator
             file.write("=" * 50)
             
-        logging.info(f"Report for model {model_name} written to reports/Experiment_{TIME}.txt")
+        logging.info(f"Report for model {model_name} written to reports/Experiment_{model_name}_{TIME}.txt")
         
     # save the best parameters to a yaml file
-    with open(PATH_to_output, "w") as file:
+    with open(args.output_dir, "w") as file:
         yaml.dump(best_params, file)
     
     
