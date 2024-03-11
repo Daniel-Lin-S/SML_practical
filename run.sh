@@ -4,7 +4,7 @@
 
 
 # Install dependencies
-pip install -r requirements.txt
+pip install --user -r requirements.txt
 pip install xgboost
 
 # Base directory for output
