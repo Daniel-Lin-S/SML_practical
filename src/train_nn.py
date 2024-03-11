@@ -159,7 +159,7 @@ def run_training_loop(
             # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
             
         if val_loss < best_val_loss:
-            logging.info("Saving model...")
+            logging.info(f"Saving model with acc {val_acc}")
             torch.save(model.state_dict(), os.path.join(save_path, model_name))
             best_val_loss = val_loss
 
