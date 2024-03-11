@@ -12,6 +12,84 @@ from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
 
 
+class PatchEmbedding(nn.Module):
+    """
+    Projects the groups of features into a sequence of patches.  
+    
+    The input is K groups of features (may be distinct sizes),
+    
+    for each group, there is a corresponding linear projection to a low-dimensional embedding space.
+    
+    The resulting embeddings are then concatenated and projected to the desired embedding size.
+    
+    e.g. Split 500 features into 10 groups of 50, and project each group to 4 dimensions.
+    then the resulting sequence will be length 10, and each element will be of size 4.
+    """  
+    
+    def __init__(self,
+                 input_dim,
+                 n_groups,
+                 n_features_per_group,
+                 n_embed_dim):
+        """
+        Initializes the PatchEmbedding layer.
+        
+        Args:
+            - input_dim (int): The dimensionality of the input tensor
+            - n_groups (int): The number of feature groups
+            - n_features_per_group (list): The number of features in each group
+            - n_embed_dim (int): The dimensionality of the embedding
+        """
+        super().__init__()
+        
+        self.input_dim = input_dim  
+        
+        self.n_groups = n_groups
+        
+        self.n_embed_dim = n_embed_dim
+        
+        self.n_feat_group = [0] + np.cumsum(n_features_per_group).tolist()
+        
+        # Create linear layers for each group
+        self.projections = nn.ModuleList([
+            nn.Linear(n_features, n_embed_dim)
+            for n_features in n_features_per_group
+        ])
+        
+        self.layer_norms = nn.ModuleList(
+            [nn.LayerNorm(n_embed_dim) for _ in range(n_groups)]
+        )
+        
+        
+    def forward(self, x):
+        """
+        Args:       
+            - x (torch.Tensor): The input tensor of shape [batch_size, n_features]
+            
+        Returns:  
+            - x (torch.Tensor): The output tensor of shape [batch_size, n_patches, n_embed_dim]
+        """
+        x_embedded = []
+        
+        for i, (projection, norm) in enumerate(zip(self.projections, self.layer_norms)):
+            group = x[:, self.n_feat_group[i]:self.n_feat_group[i+1]]
+            embedded_group = projection(group)
+            normed_group = norm(embedded_group)
+            x_embedded.append(normed_group)
+            
+        x = torch.cat(x_embedded, dim=1).reshape(x.size(0), -1, self.n_embed_dim)
+        
+        return x
+    
+    @property
+    def output_dim(self):
+        return self.n_embed_dim
+
+    @property
+    def token_seq_length(self):
+        return self.n_groups
+    
+
 class MLP(nn.Module):
     """
     Implements a multi-layer perceptron (MLP) for classification, with improvements.
@@ -21,25 +99,47 @@ class MLP(nn.Module):
         self,
         input_dim,
         output_dim,
+        n_groups, 
+        n_features_per_group,
+        n_embed_dim,
         hidden_dims=[32, 64, 128],
         dropout=0.0,
         activation="tanh",
+        use_patch_embedding=True,
     ):
         """
-        Initializes the MLP model with improved practices.
+        Initializes the MLP model.
         Args:
             - input_dim (int): Dimensionality of input features.
             - output_dim (int): Dimensionality of output classes.
+            - n_groups (int): Number of feature groups.
+            - n_features_per_group (list): Number of features in each group.
+            - n_embed_dim (int): Dimensionality of the embedding.
             - hidden_dims (list): List of integers representing the sizes of hidden layers.
             - dropout (float): Dropout rate.
             - activation (str): Activation function to use ("tanh" or "relu")
+            - use_patch_embedding (bool): Whether to use the PatchEmbedding layer.
         """
         super(MLP, self).__init__()
         assert len(hidden_dims) > 0, "hidden_dims should have at least one element"
+        
+        
+        if use_patch_embedding:
+            # if uses patch embedding, then start from n_groups * n_embed_dim
+            self.patch_embedding = PatchEmbedding(input_dim = input_dim,
+                                                    n_groups = n_groups,
+                                                    n_features_per_group = n_features_per_group,
+                                                    n_embed_dim = n_embed_dim)
+            self.extra_fc = nn.Linear(n_groups * n_embed_dim, hidden_dims[0])
+            prev_dim = n_groups * n_embed_dim
+            
+        else:
+            self.patch_embedding = None
+            prev_dim = input_dim
 
         # Create the fully connected layers based on hidden_dims
         layers = []
-        prev_dim = input_dim
+        
         for dim in hidden_dims:
             layers.append(nn.Linear(prev_dim, dim))
             if activation.lower() == "relu":
@@ -51,8 +151,8 @@ class MLP(nn.Module):
             if dropout > 0:
                 layers.append(nn.Dropout(dropout))
             prev_dim = dim
-
-        # Final layer without activation before the loss
+        
+        # Create sequential model
         self.fc_layers = nn.Sequential(*layers)
         self.fc_final = nn.Linear(hidden_dims[-1], output_dim)
 
@@ -67,6 +167,11 @@ class MLP(nn.Module):
 
         # flatten
         x = x.view(x.size(0), -1)
+        
+        if self.patch_embedding is not None:
+            x = self.patch_embedding(x)
+            x = x.reshape(x.size(0), -1)
+        
         x = self.fc_layers(x)
         x = self.fc_final(x)
         return x
@@ -76,176 +181,247 @@ class ResNet(nn.Module):
     pass
 
 
-# Those implementations are incomplete and are only used for demonstration purposes
-##### DO NOT USE IN PRODUCTION #####
-
-# the code below is from the authors [gorishniy2021revisiting]
-# we only use numerical feature tokenizer in this project
-
-
-class _TokenInitialization(enum.Enum):
-    UNIFORM = "uniform"
-    NORMAL = "normal"
-
-    @classmethod
-    def from_str(cls, initialization: str) -> "_TokenInitialization":
-        try:
-            return cls(initialization)
-        except ValueError:
-            valid_values = [x.value for x in _TokenInitialization]
-            raise ValueError(f"initialization must be one of {valid_values}")
-
-    def apply(self, x, d) -> None:
-        d_sqrt_inv = 1 / math.sqrt(d)
-        if self == _TokenInitialization.UNIFORM:
-            # used in the paper "Revisiting Deep Learning Models for Tabular Data";
-            # is equivalent to `nn.init.kaiming_uniform_(x, a=math.sqrt(5))` (which is
-            # used by torch to initialize nn.Linear.weight, for example)
-            nn.init.uniform_(x, a=-d_sqrt_inv, b=d_sqrt_inv)
-        elif self == _TokenInitialization.NORMAL:
-            nn.init.normal_(x, std=d_sqrt_inv)
-
-
-class NumericalFeatureTokenizer(nn.Module):
-    """Transforms continuous features to tokens (embeddings).
-
-    See `FeatureTokenizer` for the illustration.
-
-    For one feature, the transformation consists of two steps:
-
-    * the feature is multiplied by a trainable vector
-    * another trainable vector is added
-
-    Note that each feature has its separate pair of trainable vectors, i.e. the vectors
-    are not shared between features.
-
-    Examples:
-        .. testcode::
-
-            x = torch.randn(4, 2)
-            n_objects, n_features = x.shape
-            d_token = 3
-            tokenizer = NumericalFeatureTokenizer(n_features, d_token, True, 'uniform')
-            tokens = tokenizer(x)
-            assert tokens.shape == (n_objects, n_features, d_token)
+def scaled_dot_product(q, k, v, mask=None):
     """
+    Computes the scaled dot-product attention.  
+    
+    Args:  
+        - q (torch.Tensor): The query tensor  
+        - k (torch.Tensor): The key tensor  
+        - v (torch.Tensor): The value tensor  
+        - mask (torch.Tensor): The mask tensor
+    """    
+    d_k = q.size()[-1]
+    
+    attn_logits = torch.matmul(q, k.transpose(-2, -1))
+    
+    attn_logits = attn_logits / math.sqrt(d_k)
+    
+    if mask is not None:
+        attn_logits = attn_logits.masked_fill(mask == 0, -9e15)
+        
+    attention = F.softmax(attn_logits, dim=-1)
+    
+    values = torch.matmul(attention, v)
+    
+    return values, attention
 
-    def __init__(
-        self,
-        n_features: int,
-        d_token: int,
-        bias: bool,
-        initialization: str,
-    ) -> None:
+
+
+class MultiheadAttention(nn.Module):
+    def __init__(self, 
+                 input_dim,
+                 embed_dim,
+                 num_heads):
         """
-        Args:
-            n_features: the number of continuous (scalar) features
-            d_token: the size of one token
-            bias: if `False`, then the transformation will include only multiplication.
-                **Warning**: :code:`bias=False` leads to significantly worse results for
-                Transformer-like (token-based) architectures.
-            initialization: initialization policy for parameters. Must be one of
-                :code:`['uniform', 'normal']`. Let :code:`s = d ** -0.5`. Then, the
-                corresponding distributions are :code:`Uniform(-s, s)` and :code:`Normal(0, s)`.
-                In [gorishniy2021revisiting], the 'uniform' initialization was used.
-
-        References:
-            * [gorishniy2021revisiting] Yury Gorishniy, Ivan Rubachev, Valentin Khrulkov, Artem Babenko, "Revisiting Deep Learning Models for Tabular Data", 2021
+        Implements the multi-head attention layer.   
+        
+        This first projects the already learned embeddings into stacked [Q, K, V] matrices,
+        and then applies the scaled dot-product attention.
+        
+        Finally, the output is projected back to the original embedding dimension.
+        
+        Args:  
+            - input_dim (int): The dimensionality of the input tensor
+            - embed_dim (int): The dimensionality of the embedding
+            - num_heads (int): The number of heads
+            
         """
         super().__init__()
-        initialization_ = _TokenInitialization.from_str(initialization)
-        self.weight = nn.Parameter(torch.Tensor(n_features, d_token))
-        self.bias = nn.Parameter(torch.Tensor(n_features, d_token)) if bias else None
-        for parameter in [self.weight, self.bias]:
-            if parameter is not None:
-                initialization_.apply(parameter, d_token)
+        assert embed_dim % num_heads == 0, "Embedding dimension must be 0 modulo number of heads."
 
-    @property
-    def n_tokens(self) -> int:
-        """The number of tokens."""
-        return len(self.weight)
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
 
-    @property
-    def d_token(self) -> int:
-        """The size of one token."""
-        return self.weight.shape[1]
+        self.qkv_proj = nn.Linear(input_dim, 3 * embed_dim)
+        self.o_proj = nn.Linear(embed_dim, embed_dim)
 
-    def forward(self, x):
-        """Embeddings have the same shape as the input tensor."""
-        x = self.weight[None] * x[..., None]
-        if self.bias is not None:
-            x = x + self.bias[None]
-        return x
+        self._reset_parameters()
 
+    def _reset_parameters(self):
+        # Original Transformer initialization, see PyTorch documentation
+        nn.init.xavier_uniform_(self.qkv_proj.weight)
+        self.qkv_proj.bias.data.fill_(0)
+        nn.init.xavier_uniform_(self.o_proj.weight)
+        self.o_proj.bias.data.fill_(0)
 
-class AttEncoder(nn.Module):
-    """
-    A simple implementation of a Transformer encoder for tabular data.
+    def forward(self, 
+                x, 
+                mask=None, 
+                return_attention=False):
+        """Takes input [Batch, SeqLen, Dims] and returns [Batch, SeqLen, Dims]."""
+        batch_size, seq_length, embed_dim = x.size()
+        qkv = self.qkv_proj(x)
 
-    The model consists of the following components:
-        - Embedding layer for numerical features
-        - Multi-head self-attention layer
-        - Final linear layer for classification
-    """
+        # Separate Q, K, V from linear output
+        qkv = qkv.reshape(batch_size, seq_length, self.num_heads, 3 * self.head_dim)
+        qkv = qkv.permute(0, 2, 1, 3)  # [Batch, Head, SeqLen, Dims]
+        q, k, v = qkv.chunk(3, dim=-1)
+    
 
-    def __init__(
-        self,
-        input_dim: int,
-        embed_dim: int,
-        n_tokens: int,
-        linear_hidden_dim: int,
-        output_dim: int,
-        num_heads: int,
-        dropout_rate: float = 0.0,
-    ):
+        # Determine value outputs
+        values, attention = scaled_dot_product(q, k, v, mask=mask)
+        values = values.permute(0, 2, 1, 3)  # [Batch, SeqLen, Head, Dims]
+        values = values.reshape(batch_size, seq_length, embed_dim)
+        o = self.o_proj(values)
+
+        if return_attention:
+            return o, attention
+        else:
+            return o
+        
+        
+class EncoderBlock(nn.Module):
+    def __init__(self, 
+                 input_dim,
+                 num_heads,
+                 dim_feedforward,
+                 dropout=0.0):
         """
-        Initializes the AttEncoder model.
-
+        Implements a single encoder block of the Transformer model.  
+        
         Args:
-            - input_dim (int): Dimensionality of input features.
-            - embed_dim (int): Dimensionality of the embeddings.
-            - n_tokens (int): Number of tokens to use.
-            - linear_hidden_dim (int): Dimensionality of the hidden layer.
-            - output_dim (int): Dimensionality of the output classes.
-            - num_heads (int): Number of heads in the multi-head attention layer.
-            - dropout_rate (float): Dropout rate.
+            - input_dim (int): The dimensionality of the input tensor
+            - num_heads (int): The number of heads
+            - dim_feedforward (int): The dimensionality of the feedforward layer
+            - dropout (float): Dropout rate
         """
+        
+        super().__init__()
 
-        self.input_net = nn.Sequential(
-            nn.Linear(input_dim, embed_dim),
-            nn.LayerNorm(embed_dim),
-            nn.Dropout(dropout_rate),
+        # Attention layer
+        self.self_attn = MultiheadAttention(input_dim, input_dim, num_heads)
+
+        # Two-layer MLP
+        self.linear_net = nn.Sequential(
+            nn.Linear(input_dim, dim_feedforward),
+            nn.Dropout(dropout),
+            nn.ReLU(inplace=True),
+            nn.Linear(dim_feedforward, input_dim),
         )
 
-        self.feature_tokenizer = NumericalFeatureTokenizer(
-            input_dim, n_tokens, bias=True, initialization="uniform"
-        )
+        # Layers to apply in between the main layers
+        self.norm1 = nn.LayerNorm(input_dim)
+        self.norm2 = nn.LayerNorm(input_dim)
+        self.dropout = nn.Dropout(dropout)
 
-        self.attention = nn.MultiheadAttention(
-            embed_dim=embed_dim,
-            num_heads=num_heads,
-            dropout=dropout_rate,
-            batch_first=True,
-        )
+    def forward(self, x, mask=None):
+        """Outputs the same dimensions as the input."""
+        # Attention part
+        attn_out = self.self_attn(x, mask=mask)
+        x = x + self.dropout(attn_out)
+        x = self.norm1(x)
 
-        self.output_net = nn.Sequential(
-            nn.Linear(embed_dim, linear_hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(linear_hidden_dim, output_dim),
-        )
+        # MLP part
+        linear_out = self.linear_net(x)
+        x = x + self.dropout(linear_out)
+        x = self.norm2(x)
 
-        self.dropout = nn.Dropout(dropout_rate)
-
-    def forward(self, x):
-        tokens = self.feature_tokenizer(x)
-        x = self.input_net(x)
-
-    pass
-
-
-
-
+        return x
+    
+    
+class TransformerPredictor(nn.Module):
+    """
+    Implements the transformer with possible embeddings using custom functions.
+    (to visualise attention)
+    """
+    
+    def __init__(self, 
+                    input_dim,
+                    n_groups,
+                    n_heads,
+                    n_features_per_group,
+                    n_embed_dim,
+                    output_dim,
+                    num_layers,
+                    dim_feedforward,
+                    dropout=0.0,
+                    use_patch_embedding=True):
+        """
+        Initializes the Transformer model.
+        
+        Args:
+            - input_dim (int): The dimensionality of the input tensor
+            - n_groups (int): The number of feature groups
+            - n_heads (int): The number of heads in the multi-head attention layer
+            - n_features_per_group (list): The number of features in each group
+            - n_embed_dim (int): The dimensionality of the embedding
+            - output_dim (int): The dimensionality of the output classes
+            - num_layers (int): The number of layers in the model
+            - dim_feedforward (int): The dimensionality of the feedforward layer
+            - dropout (float): Dropout rate
+            - use_patch_embedding (bool): Whether to use the PatchEmbedding layer
+        """
+        super().__init__()
+        
+        self.num_layers = num_layers
+        
+        if use_patch_embedding:
+            self.patch_embedding = PatchEmbedding(input_dim = input_dim,
+                                                  n_groups = n_groups,
+                                                  n_features_per_group = n_features_per_group,
+                                                  n_embed_dim = n_embed_dim)
+        else:
+            # self.patch_embedding = None
+            raise NotImplementedError("Not implemented without patch embedding")
+            
+        model_dim = n_embed_dim
+            
+        self.encoder = nn.ModuleList([EncoderBlock(input_dim = model_dim,
+                                                   num_heads = n_heads,
+                                                   dim_feedforward = dim_feedforward,
+                                                    dropout = dropout) for _ in range(num_layers)])
+        
+        # Output layer (can be implemented as a global pooling operation)
+        # but here simply a linear layer that takes (batch, seq, features) -> (batch, classes)
+        self.output_layer = nn.Linear(in_features=model_dim * n_groups,
+                                      out_features=output_dim)
+        
+    
+    def forward(self, x, mask=None):
+        """
+        Defines the forward pass of the Transformer model. 
+        
+        Args:  
+            - x (torch.Tensor): The input tensor, shape [batch_size, n_features]
+            - mask (torch.Tensor): The mask tensor
+            
+        Returns:  
+            - x (torch.Tensor): The output tensor, shape [batch_size, n_classes]
+        """
+        if self.patch_embedding is not None:
+            x = self.patch_embedding(x)
+        # else:
+            # treat the (batch, features) as (batch, seq, feature)
+            # x = x.unsqueeze(1)
+        
+        for layer in self.encoder:
+            x = layer(x, mask=mask)
+            
+            
+        # when using only linear layer, need to resize the tensor
+        x = x.view(x.size(0), -1)
+        x = self.output_layer(x)
+        
+        return x
+    
+    
+    @torch.no_grad()
+    def get_attention_map(self, x, mask=None):
+        """
+        Returns the attention map for the input tensor.
+        """
+        if self.patch_embedding is not None:
+            x = self.patch_embedding(x)
+        
+        attention_maps = []
+        for layer in self.encoder:
+            _, attn_map = layer.self_attn(x, mask=mask, return_attention=True)
+            attention_maps.append(attn_map)
+            x = layer(x)
+            
+        return attention_maps
 
 class GroupedFeaturesTransformer(nn.Module):
     def __init__(
