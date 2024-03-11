@@ -188,20 +188,30 @@ def main():
         best_params[model_name] = best_model.best_params_
         
         # evaluate the model and store in text file
-        y_pred = best_model.predict(X_test)
-        report = classification_report(y_test, y_pred)
+        y_pred_test = best_model.predict(X_test)
+        y_pred_train = best_model.predict(X_train)
+        report_test = classification_report(y_test, y_pred_test)
+        report_train = classification_report(y_train, y_pred_train)
+        
         
         if not os.path.exists("reports"):
             os.makedirs("reports")
             
         with open(f"reports/Experiment_{model_name}_{args.reduce_method}_{args.n_components}.txt", "w") as file:
             file.write(f"Model: {model_name}\n")
-            file.write(report)
+            file.write(report_test)
             file.write("\n")
+            file.write("=" * 50)
             file.write(f"Best parameters: {best_model.best_params_}\n")
             file.write("\n")
+            
             # some separator
             file.write("=" * 50)
+            file.write("\n")
+            
+            # get train accuracy
+            file.write(f"Train report \n")
+            file.write(report_train)
             
         logging.info(f"Report for model {model_name} has been written")
         
