@@ -134,7 +134,7 @@ class MusicDataset:
         elif method == "lda":
             # assert that n_components is less than the number of classes
             assert (
-                n_components <= len(np.unique(y)) - 1
+                n_components <= len(np.unique(y_test)) - 1
             ), "n_components must be less than the number of classes."
 
             reducer = LinearDiscriminantAnalysis(n_components=n_components)

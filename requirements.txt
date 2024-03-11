@@ -1,48 +1,21 @@
-ipykernel==6.20.2
-ipython==8.14.0
-ipython-genutils==0.2.0
 
-jupyter==1.0.0
-jupyter_client==7.4.9
-jupyter-console==6.4.4
-jupyter-contrib-core==0.4.0
-jupyter-contrib-nbextensions==0.7.0
-jupyter_core==5.1.3
-jupyter-events==0.6.3
-jupyter-highlight-selected-word==0.2.0
-jupyter-latex-envs==1.4.6
-jupyter-nbextensions-configurator==0.6.1
-jupyter_server==2.1.0
-jupyter_server_terminals==0.4.4
-jupyterlab-pygments==0.2.2
-jupyterlab-widgets==3.0.5
+matplotlib
+matplotlib-inline
 
-matplotlib==3.6.3
-matplotlib-inline==0.1.6
 
-ml-collections==0.1.1
-ml-dtypes==0.2.0
+numpy
 
-numpy==1.24.1
-oauthlib==3.2.2
+pandas
+pandas-flavor
 
-pandas==1.5.2
-pandas-flavor==0.5.0
+PyYAML
 
-PyYAML==6.0
+scikit-image
+scikit-learn
+scipy
+seaborn
 
-scikit-image==0.22.0
-scikit-learn==1.2.2
-scipy==1.10.0
-seaborn==0.12.2
+setuptools
 
-setuptools==65.6.3
-
-tensorboard==2.13.0
-
-torch==2.2.1
-
-tqdm==4.65.0
-
-xgboost==2.0.3
+xgboost
 
