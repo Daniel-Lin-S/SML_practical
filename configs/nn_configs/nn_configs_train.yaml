@@ -1,26 +1,26 @@
 
-mlp:
-  input_dim: [518]
-  hidden_dims: [[16], [32, 16]]
-  output_dim: [8]
-  dropout: [0.0, 0.2]
-  activation: ['relu', 'tanh']
-  n_groups: [11]
-  n_features_per_group: [[84, 84, 84, 140, 7, 7, 7, 49, 7, 42, 7]]
-  n_embed_dim: [6, 7, 8]
-  use_patch_embedding: [true, false]
+# mlp:
+#   input_dim: [518]
+#   hidden_dims: [[16], [32, 16]]
+#   output_dim: [8]
+#   dropout: [0.0, 0.2]
+#   activation: ['relu', 'tanh']
+#   n_groups: [11]
+#   n_features_per_group: [[84, 84, 84, 140, 7, 7, 7, 49, 7, 42, 7]]
+#   n_embed_dim: [6, 7, 8]
+#   use_patch_embedding: [true, false]
 
 
 transformer:
   input_dim: [518]
-  n_heads: [2, 4]
+  n_heads: [2]
   n_groups: [11]
   n_features_per_group: [[84, 84, 84, 140, 7, 7, 7, 49, 7, 42, 7]]
-  n_embed_dim: [8, 16]
-  dim_feedforward: [64, 128, 256]
-  dropout: [0.0, 0.2, 0.5]
+  n_embed_dim: [16, 32]
+  dim_feedforward: [128]
+  dropout: [0.0, 0.5]
   output_dim: [8]
-  num_layers: [1, 2, 3]
+  num_layers: [3, 4]
   use_patch_embedding: [true]
 
 

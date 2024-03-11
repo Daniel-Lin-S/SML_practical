@@ -30,7 +30,7 @@ PATH_to_output = "configs/nn_configs/nn_configs_test.yaml"
 
 # the group transformer is basically the same as the transformer in our case
 METHOD_DICT = {
-    'mlp': MLP,
+    # 'mlp': MLP,
     'transformer': TransformerPredictor,
     # 'group_transformer': GroupedFeaturesTransformer,
 }
@@ -236,7 +236,7 @@ def main():
                                          scheduler=scheduler,
                                          device=args.device,
                                          optimizer_name = "adamW",
-                                         n_epochs=100,
+                                         n_epochs=500,
                                          verbose=0)
         
         best_params_to_save[method_names] = best_params
