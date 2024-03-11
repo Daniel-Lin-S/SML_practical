@@ -36,13 +36,13 @@ TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
 
 if Version(sklearn.__version__) < Version("1.2"):
     KWARGS_FOR_GRID_SEARCH = {
-        "l_svm": {"max_iter": 1},
+        "l_svm": {"max_iter": 5000},
         "xgboost_rf": {"random_state": 42},
         "adaboost": {"base_estimator": DecisionTreeClassifier()},
     }
 else:
     KWARGS_FOR_GRID_SEARCH = {
-        "l_svm": {"max_iter": 1},
+        "l_svm": {"max_iter": 5000},
         "xgboost_rf": {"random_state": 42},
         "adaboost": {"estimator": DecisionTreeClassifier()},
     }
@@ -194,7 +194,7 @@ def main():
         if not os.path.exists("reports"):
             os.makedirs("reports")
             
-        with open(f"reports/Experiment_{model_name}_{TIME}.txt", "w") as file:
+        with open(f"reports/Experiment_{model_name}_{args.reduce_method}_{args.n_components}.txt", "w") as file:
             file.write(f"Model: {model_name}\n")
             file.write(report)
             file.write("\n")
@@ -203,7 +203,7 @@ def main():
             # some separator
             file.write("=" * 50)
             
-        logging.info(f"Report for model {model_name} written to reports/Experiment_{model_name}_{TIME}.txt")
+        logging.info(f"Report for model {model_name} has been written")
         
     # save the best parameters to a yaml file
     with open(args.output_dir, "w") as file:
