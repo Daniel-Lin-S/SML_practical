@@ -1,0 +1,24 @@
+# naive_bayes:
+
+logistic_regression:
+  C: [0.001, 0.01, 0.1, 1, 10, 100] # regularisation strength
+  penalty: ['l2', 'none']
+  solver: ['lbfgs']  # solver for optimisation
+
+xgboost_rf:
+  learning_rate: [0.01, 0.1, 0.2] # step size shrinkage used in each boosting iteration
+  n_estimators: [50, 100] # number of trees
+  max_depth: [5, 7, 10] # max tree depth
+  subsample: [0.6, 0.8] # fraction of samples used for fitting each tree
+  colsample_bynode: [0.6, 0.8] # fraction of features used for fitting each tree
+  gamma: [0, 0.1, 0.2] # Minimum loss reduction required to make a further partition on a leaf node of the tree.
+
+adaboost:
+  n_estimators: [50, 100, 200]
+  learning_rate: [0.01, 0.1, 0.5]
+  # max_depth: [2, 4, 6]
+
+l_svm:
+  alpha: [0.0001, 0.001, 0.01]
+  penalty: ['l1', 'l2', 'elasticnet']
+  loss: ['hinge', 'squared_hinge', 'log', 'modified_huber', 'perceptron']
