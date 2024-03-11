@@ -1,4 +1,4 @@
-l_svm:
-  alpha: 0.001
-  loss: squared_hinge
-  penalty: l1
+logistic_regression:
+  C: 10
+  penalty: l2
+  solver: lbfgs
