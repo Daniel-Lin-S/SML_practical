@@ -182,6 +182,7 @@ def main():
             scoring=args.scoring,
             n_jobs=args.n_jobs,
             ignore_warnings=True,
+            verbose = 3,
             **kwargs,
         )
         

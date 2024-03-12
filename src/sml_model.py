@@ -52,6 +52,7 @@ def grid_search_cv(model_name,
                    scoring='accuracy',
                    n_jobs=-1,
                    ignore_warnings=True,
+                   verbose = 0,
                    **kwargs) -> GridSearchCV:
     """
     Perform a grid search cross-validation on the given model.
@@ -69,6 +70,7 @@ def grid_search_cv(model_name,
         - scoring: The scoring metric to use
         - n_jobs: The number of jobs to run in parallel
         - ignore_warnings: Whether or not to ignore warnings
+        - verbose: The verbosity level
     
     Returns:
         - The best model found
@@ -86,7 +88,7 @@ def grid_search_cv(model_name,
         warnings.filterwarnings("ignore", category=FutureWarning)
     
     # load the parameters
-    grid_search = GridSearchCV(model, param_grid, cv=cv, scoring=scoring, n_jobs=n_jobs)
+    grid_search = GridSearchCV(model, param_grid, cv=cv, scoring=scoring, n_jobs=n_jobs, verbose=verbose)
     
     # fit the model
     grid_search.fit(X_train, y_train)
