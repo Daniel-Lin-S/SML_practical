@@ -28,9 +28,11 @@
 
 
 c_svm:
-  C: [0.001, 0.01, 0.1, 1] # regularisation strength
+  # C: [0.001, 0.01, 0.1, 1] # regularisation strength
+  c_svm__C: [0.1, 1.0, 2.0]
   # kernel: ['linear', 'poly', 'rbf', 'sigmoid'] # kernel function
-  kernel: ['poly']
+  c_svm__kernel: ['poly', 'rbf']
   degree: [2, 3, 4, 5, 6] # degree of the polynomial kernel function
+  # c_svm__degree: [3]
   gamma: ['scale', 'auto'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
   
