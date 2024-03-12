@@ -71,6 +71,7 @@ def nn_grid_search_one(model_class,
     
     for i, params in enumerate(params_list):
         logging.info(f"Searching... Iteration ({i+1}/{param_length})")
+        logging.info(f"Params: {params}")
         
         model = model_class(**params)
         model_name = f"{model.__class__.__name__}_{TIME}.pth"
@@ -236,7 +237,7 @@ def main():
                                          scheduler=scheduler,
                                          device=args.device,
                                          optimizer_name = "adamW",
-                                         n_epochs=500,
+                                         n_epochs=100,
                                          verbose=0)
         
         best_params_to_save[method_names] = best_params
