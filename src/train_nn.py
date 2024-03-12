@@ -103,6 +103,7 @@ def run_training_loop(
     device="mps",
     verbose=5,
     write_logs=True,
+    patience=10,
 ):
     """
     Runs the training loop for a given number of epochs.
@@ -121,6 +122,8 @@ def run_training_loop(
         - device (str): Device to perform computations
         - verbose (int): Print training logs every `verbose` epochs,
                         if is 0, no logs will be printed.
+        - write_logs (bool): Write training and validation logs to text files
+        - patience (int): Number of epochs to wait before early stopping
 
     Returns:
         - list1: Training losses
@@ -132,6 +135,7 @@ def run_training_loop(
     val_losses = []
 
     best_val_loss = float("inf")
+    best_val_acc = 0
 
     if save_path is None:
         save_path = os.path.join("models")
@@ -148,6 +152,9 @@ def run_training_loop(
 
     model.to(device)  # Move model to device
 
+    # increment when no improvement in val_loss
+    wait = 0
+    
     for epoch in range(num_epochs):
         train_loss = train(model, train_loader, optimizer, loss_function, scheduler, device)
         val_loss, val_acc = validate(model, val_loader, loss_function, device)
@@ -158,10 +165,16 @@ def run_training_loop(
             )
             # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
             
-        if val_loss < best_val_loss:
+        if val_loss < best_val_loss or val_acc > best_val_acc:
             logging.info(f"Saving model with acc {val_acc}")
             torch.save(model.state_dict(), os.path.join(save_path, model_name))
             best_val_loss = val_loss
+            wait = 0
+        else:
+            wait += 1
+            if wait > patience:
+                logging.info(f"Early stopping at epoch {epoch+1}")
+                break
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
