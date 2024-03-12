@@ -32,6 +32,7 @@ PATH_to_output = "configs/nn_configs/nn_configs_test.yaml"
 METHOD_DICT = {
     # 'mlp': MLP,
     'transformer': TransformerPredictor,
+    'resnet': ResNet,
     # 'group_transformer': GroupedFeaturesTransformer,
 }
 
@@ -59,8 +60,9 @@ def nn_grid_search_one(model_class,
                       optimizer_name,
                       scheduler=None,
                       device='cpu',
-                      n_epochs=10,
-                      verbose=0):
+                      n_epochs=50,
+                      verbose=0,
+                      patience=10,):
     """
     Performs search over the params dict in the list.  
     
@@ -96,6 +98,7 @@ def nn_grid_search_one(model_class,
             device=device,
             verbose=verbose,
             write_logs=False,
+            patience=patience,
         )
         
         # evaluate the model after loading the best weights
@@ -237,7 +240,8 @@ def main():
                                          scheduler=scheduler,
                                          device=args.device,
                                          optimizer_name = "adamW",
-                                         n_epochs=100,
+                                         n_epochs=50,
+                                         patience=10,
                                          verbose=0)
         
         best_params_to_save[method_names] = best_params
