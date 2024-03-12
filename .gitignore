@@ -7,3 +7,5 @@ models/
 notebooks/wang.ipynb
 notebooks/wang2.ipynb
 reports/
+# regex that contains output
+output.*

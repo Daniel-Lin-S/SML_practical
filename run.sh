@@ -37,13 +37,15 @@ for reduce_method in lda none; do
         # Ensure the output directory exists
         mkdir -p "$output_dir"
 
+        output_file="${output_dir}/output.yaml"
+        
         # Run the script with the current set of parameters
         if [ "$reduce_method" = "none" ]; then
-            echo "Running: python run_sml.py --reduce_method $reduce_method --output_dir $output_dir"
-            python run_sml.py --reduce_method "$reduce_method" --output_dir "$output_dir"
+            echo "Running: python run_sml.py --reduce_method $reduce_method --output_dir $output_file"
+            python run_sml.py --reduce_method "$reduce_method" --output_dir "$output_file"
         else
-            echo "Running: python run_sml.py --reduce_method $reduce_method --n_components $n --output_dir $output_dir"
-            python run_sml.py --reduce_method "$reduce_method" --n_components "$n" --output_dir "$output_dir"
+            echo "Running: python run_sml.py --reduce_method $reduce_method --n_components $n --output_dir $output_file"
+            python run_sml.py --reduce_method "$reduce_method" --n_components "$n" --output_dir "$output_file"
         fi
     done
 done
