@@ -141,16 +141,21 @@ def main():
     )
     
     reduction_method = args.reduce_method
+    
     if reduction_method == "lda":
         assert args.n_components <= 7, "The number of components for LDA must be less than or equal to 7"
 
     
     if reduction_method == "none":
         reduction_method = None
+        
+    scaling_method = args.scaling_method
+    if scaling_method == "none":
+        scaling_method = None
     
     # split the data
     X_train, X_test, y_train, y_test = dataset.get_data(
-        scaler=args.scaling_method,
+        scaler=None,
         reduction_method=reduction_method,
         n_components=args.n_components,
     )
@@ -183,6 +188,7 @@ def main():
             n_jobs=args.n_jobs,
             ignore_warnings=True,
             verbose = 3,
+            scaling_method=scaling_method,
             **kwargs,
         )
         
