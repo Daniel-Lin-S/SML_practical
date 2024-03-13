@@ -1,27 +1,27 @@
 # naive_bayes:
 
-# logistic_regression:
-#   C: [0.001, 0.01, 0.1, 1, 10, 100] # regularisation strength
-#   penalty: ['l2', 'none']
-#   solver: ['lbfgs']  # solver for optimisation
+logistic_regression:
+  logistic_regression__C: [1] # regularisation strength
+  logistic_regression__penalty: ['l2']
+  logistic_regression__solver: ['lbfgs']  # solver for optimisation
 
-xgboost_rf:
-  # learning_rate: [0.1]
-  # subsample: [0.5]
-  # colsample_bynode: [0.2]
-  xgboost_rf__learning_rate: [0.05] # step size shrinkage used in each boosting iteration
-  xgboost_rf__n_estimators: [100, 200] # number of trees
-  xgboost_rf__max_depth: [5] # max tree depth
-  xgboost_rf__subsample: [0.3, 0.5, 0.9] # fraction of samples used for fitting each tree
-  xgboost_rf__colsample_bynode: [0.5, 0.6, 0.9] # fraction of features used for fitting each tree
-  # xgboost_rf__gamma: [0, 0.1, 0.2] # Minimum loss reduction required to make a further partition on a leaf node of the tree.
+# xgboost_rf:
+#   # learning_rate: [0.1]
+#   # subsample: [0.5]
+#   # colsample_bynode: [0.2]
+#   xgboost_rf__learning_rate: [0.05] # step size shrinkage used in each boosting iteration
+#   xgboost_rf__n_estimators: [100, 200] # number of trees
+#   xgboost_rf__max_depth: [5] # max tree depth
+#   xgboost_rf__subsample: [0.3, 0.5, 0.9] # fraction of samples used for fitting each tree
+#   xgboost_rf__colsample_bynode: [0.5, 0.6, 0.9] # fraction of features used for fitting each tree
+#   # xgboost_rf__gamma: [0, 0.1, 0.2] # Minimum loss reduction required to make a further partition on a leaf node of the tree.
 
-random_forest:
-  random_forest__n_estimators: [100, 200, 300] # number of trees in the forest
-  random_forest__max_depth: [None, 5, 10] # maximum depth of the tree
-  random_forest__min_samples_split: [2, 5, 10] # minimum number of samples required to split an internal node
-  random_forest__min_samples_leaf: [1, 2, 4] # minimum number of samples required to be at a leaf node
-  random_forest__max_features: ['auto', 'sqrt'] # number of features to consider when looking for the best split
+# random_forest:
+#   random_forest__n_estimators: [100, 200, 300] # number of trees in the forest
+#   random_forest__max_depth: [None, 5, 10] # maximum depth of the tree
+#   random_forest__min_samples_split: [2, 5, 10] # minimum number of samples required to split an internal node
+#   random_forest__min_samples_leaf: [1, 2, 4] # minimum number of samples required to be at a leaf node
+#   random_forest__max_features: ['auto', 'sqrt'] # number of features to consider when looking for the best split
 
 
 # adaboost:
@@ -35,12 +35,19 @@ random_forest:
 #   loss: ['hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron', 'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive']
 
 
-c_svm:
-  # C: [0.001, 0.01, 0.1, 1] # regularisation strength
-  c_svm__C: [0.1, 1.0, 2.0]
-  # kernel: ['linear', 'poly', 'rbf', 'sigmoid'] # kernel function
-  c_svm__kernel: ['poly', 'rbf']
-  degree: [2, 3, 4, 5, 6] # degree of the polynomial kernel function
-  # c_svm__degree: [3]
-  c_svm__gamma: ['scale', 'auto'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
+# c_svm:
+#   # C: [0.001, 0.01, 0.1, 1] # regularisation strength
+#   c_svm__C: [0.1, 1.0, 2.0]
+#   # kernel: ['linear', 'poly', 'rbf', 'sigmoid'] # kernel function
+#   c_svm__kernel: ['poly', 'rbf']
+#   degree: [2, 3, 4, 5, 6] # degree of the polynomial kernel function
+#   # c_svm__degree: [3]
+#   c_svm__gamma: ['scale', 'auto'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
+
+# c_svm:
+#   # C: [0.001, 0.01, 0.1, 1] # regularisation strength
+#   c_svm__C: [2.0]
+#   # kernel: ['linear', 'poly', 'rbf', 'sigmoid'] # kernel function
+#   c_svm__kernel: ['rbf']
+
   
