@@ -13,7 +13,7 @@ base_dir="configs/sml_configs"
 mkdir -p "$base_dir"
 
 # Loop through reduce_method options
-for reduce_method in lda pca mrmr none; do # lda pca none
+for reduce_method in lda pca mrmr none; do # lda pca none mrmr
     # Define n_components array based on the reduce_method
     if [ "$reduce_method" = "pca" ]; then
         # declare -a n_components=(20 30 40 50 100)
