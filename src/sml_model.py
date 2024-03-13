@@ -18,6 +18,8 @@ except ImportError:
     from sklearn.grid_search import GridSearchCV
     
 from sklearn.exceptions import ConvergenceWarning
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn import pipeline
 
 
 METHOD_DICT = {
@@ -52,6 +54,8 @@ def grid_search_cv(model_name,
                    scoring='accuracy',
                    n_jobs=-1,
                    ignore_warnings=True,
+                   verbose = 0,
+                   scaling_method = None,
                    **kwargs) -> GridSearchCV:
     """
     Perform a grid search cross-validation on the given model.
@@ -69,13 +73,31 @@ def grid_search_cv(model_name,
         - scoring: The scoring metric to use
         - n_jobs: The number of jobs to run in parallel
         - ignore_warnings: Whether or not to ignore warnings
+        - verbose: The verbosity level
+        - scaling_method: The method to use for scaling the data
     
     Returns:
         - The best model found
     """
     
     # initialize the model
-    model = METHOD_DICT[model_name](**kwargs)
+    _model = METHOD_DICT[model_name](**kwargs)
+    
+    # pipeline of model
+    if scaling_method is not None:
+        if scaling_method == "standard":
+            model = pipeline.Pipeline([
+                ("scaler", StandardScaler()),
+                (model_name, _model)
+            ])
+        elif scaling_method == "minmax":
+            model = pipeline.Pipeline([
+                ("scaler", MinMaxScaler()),
+                (model_name, _model)
+            ])
+        else:
+            raise ValueError(f"Scaling method {scaling_method} not found")
+    
     
     # parameter grid
     param_grid = params_config
@@ -86,7 +108,7 @@ def grid_search_cv(model_name,
         warnings.filterwarnings("ignore", category=FutureWarning)
     
     # load the parameters
-    grid_search = GridSearchCV(model, param_grid, cv=cv, scoring=scoring, n_jobs=n_jobs)
+    grid_search = GridSearchCV(model, param_grid, cv=cv, scoring=scoring, n_jobs=n_jobs, verbose=verbose)
     
     # fit the model
     grid_search.fit(X_train, y_train)

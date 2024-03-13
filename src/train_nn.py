@@ -1,6 +1,7 @@
 """Training function for a simple neural network."""
 
 import os
+import time
 import argparse
 import logging
 import torch
@@ -130,9 +131,12 @@ def run_training_loop(
         - list2: Validation losses
     """
 
+    TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
+
     # Set up logging
     train_losses = []
     val_losses = []
+    val_accs = []
 
     best_val_loss = float("inf")
     best_val_acc = 0
@@ -154,9 +158,11 @@ def run_training_loop(
 
     # increment when no improvement in val_loss
     wait = 0
-    
+
     for epoch in range(num_epochs):
-        train_loss = train(model, train_loader, optimizer, loss_function, scheduler, device)
+        train_loss = train(
+            model, train_loader, optimizer, loss_function, scheduler, device
+        )
         val_loss, val_acc = validate(model, val_loader, loss_function, device)
 
         if verbose > 0 and epoch % verbose == 0:
@@ -164,11 +170,12 @@ def run_training_loop(
                 f"Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%"
             )
             # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
-            
-        if val_loss < best_val_loss or val_acc > best_val_acc:
+
+        if val_acc > best_val_acc:
             logging.info(f"Saving model with acc {val_acc}")
             torch.save(model.state_dict(), os.path.join(save_path, model_name))
             best_val_loss = val_loss
+            best_val_acc = val_acc
             wait = 0
         else:
             wait += 1
@@ -178,6 +185,7 @@ def run_training_loop(
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
+        val_accs.append(val_acc)
 
     logging.info(f"Training complete. Model saved to {save_path}")
 
@@ -187,8 +195,13 @@ def run_training_loop(
         if not os.path.exists(logs_dir):
             os.makedirs(logs_dir)
 
-        train_log_path = os.path.join(logs_dir, "train_log.txt")
-        val_log_path = os.path.join(logs_dir, "val_log.txt")
+        train_log_path = os.path.join(
+            logs_dir, f"{model_name}_{TIME}_train_loss_log.txt"
+        )
+        val_log_path = os.path.join(logs_dir, f"{model_name}_{TIME}_val_loss_log.txt")
+        val_acc_log_path = os.path.join(
+            logs_dir, f"{model_name}_{TIME}_val_acc_log.txt"
+        )
 
         with open(train_log_path, "w") as f:
             for item in train_losses:
@@ -198,4 +211,8 @@ def run_training_loop(
             for item in val_losses:
                 f.write("%s\n" % item)
 
-    return train_losses, val_losses
+        with open(val_acc_log_path, "w") as f:
+            for item in val_accs:
+                f.write("%s\n" % item)
+
+    return train_losses, val_losses, val_accs
