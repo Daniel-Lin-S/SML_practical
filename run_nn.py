@@ -181,6 +181,8 @@ def main():
         logging.warning("CUDA is not available. Using CPU instead.")
         args.device = "cpu"
 
+    features_to_drop = ['chroma_cqt', 'chroma_cens']
+    
     # load the data
     dataset = MusicDataset(
         path_to_X=PATH_to_X,
@@ -188,6 +190,8 @@ def main():
         test_size=args.test_size,
         random_state=args.random_state,
         shuffle=args.shuffle,
+        swap_axes=False,
+        feature_to_drop=features_to_drop
     )
 
     # split the data
@@ -197,6 +201,8 @@ def main():
         n_components=N_COMPONENTS,
         k_fold_splits=args.cv,
     )
+    
+    print(f"Sanity check of shapes: {X_train.shape}, {X_test.shape}, {y_train.shape}, {y_test.shape}")
 
     # get torch Dataset
     train_set = MusicData(X_train, y_train)
@@ -242,7 +248,7 @@ def main():
             scheduler=scheduler,
             device=args.device,
             optimizer_name="adamW",
-            n_epochs=50,
+            n_epochs=60,
             patience=10,
             verbose=0,
         )
