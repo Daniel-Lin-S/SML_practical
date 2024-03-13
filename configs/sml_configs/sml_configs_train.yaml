@@ -34,5 +34,5 @@ c_svm:
   c_svm__kernel: ['poly', 'rbf']
   degree: [2, 3, 4, 5, 6] # degree of the polynomial kernel function
   # c_svm__degree: [3]
-  gamma: ['scale', 'auto'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
+  c_svm__gamma: ['scale', 'auto'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
   
