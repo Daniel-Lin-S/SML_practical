@@ -1,5 +1,6 @@
 """Contains a collection of Statistical Machine Learning Models."""
-
+import time
+import timeit
 import yaml
 import warnings
 
@@ -67,7 +68,7 @@ def grid_search_cv(
     reduction_method="pca",
     n_components=2,
     **kwargs,
-) -> GridSearchCV:
+):
     """
     Perform a grid search cross-validation on the given model.
 
@@ -90,7 +91,8 @@ def grid_search_cv(
         - n_components: The number of components to reduce to
 
     Returns:
-        - The best model found
+        - GridSearchCV object
+        - The time taken to fit the model
     """
 
     # initialize the model
@@ -143,10 +145,17 @@ def grid_search_cv(
     )
 
     # fit the model
-    print(X_train.shape, y_train.shape)
+    begin = timeit.default_timer()
     grid_search.fit(X_train, y_train)
+    end = timeit.default_timer()
+    
+    time_elapsed = end - begin
 
-    return grid_search
+    return grid_search, time_elapsed
+
+
+def evaluate_sml_model_time():
+    pass
 
 
 def evaluate_sml_model(model, X_test, y_test):

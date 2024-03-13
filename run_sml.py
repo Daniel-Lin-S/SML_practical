@@ -196,7 +196,7 @@ def main():
 
         logging.info(f"Running grid search for model {model_name}")
 
-        best_model = grid_search_cv(
+        best_model, time_elapsed = grid_search_cv(
             model_name,
             params_config,
             args.output_dir,
@@ -242,6 +242,11 @@ def main():
             # get train accuracy
             file.write(f"Train report \n")
             file.write(report_train)
+            
+            # also write the time
+            file.write("\n")
+            file.write(f"="*50)
+            file.write(f"\nTime taken: {time_elapsed} seconds\n")
 
         logging.info(f"Report for model {model_name} has been written")
 
