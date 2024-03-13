@@ -235,11 +235,11 @@ def main():
             
         logging.info(f"Report for model {model_name} has been written")
         
-    # save the best parameters to a yaml file
-    out_dir_joint = os.path.join(args.output_dir, 
-                                     f"best_params_{model_name}.yaml")
-    with open(out_dir_joint, "w") as file:
-        yaml.dump(best_params, file)
+        # save the best parameters to a yaml file
+        out_dir_joint = os.path.join(args.output_dir, 
+                                        f"best_params_{model_name}.yaml")
+        with open(out_dir_joint, "w") as file:
+            yaml.dump(best_params, file)
     
     
 if __name__ == "__main__":
