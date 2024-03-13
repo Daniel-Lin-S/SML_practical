@@ -82,7 +82,7 @@ def nn_grid_search_one(
         model_name = f"{model.__class__.__name__}_{TIME}.pth"
 
         if optimizer_name == "adamW":
-            optimizer = torch.optim.AdamW(model.parameters(), lr=0.01)
+            optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
         elif optimizer_name == "adam":
             optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
         else:
@@ -248,8 +248,8 @@ def main():
             scheduler=scheduler,
             device=args.device,
             optimizer_name="adamW",
-            n_epochs=60,
-            patience=10,
+            n_epochs=600,
+            patience=20,
             verbose=0,
         )
 
