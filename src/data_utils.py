@@ -3,9 +3,9 @@
 import warnings
 import numpy as np
 import pandas as pd
+from mrmr import mrmr_classif
 
-from functools import partial
-
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, LabelEncoder
 
 # import train-test split, note if sklearn is old, use cross_validation
@@ -15,8 +15,8 @@ except ImportError:
     from sklearn.cross_validation import train_test_split, KFold
 
 # Dimensionality reduction
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.decomposition import PCA
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
 
 class MusicDataset:
@@ -36,7 +36,7 @@ class MusicDataset:
         random_state=42,
         shuffle=False,
         swap_axes=False,
-        feature_to_drop = None,
+        features_to_drop=None,
     ):
         """
         Initializes the dataset with the given data and target.
@@ -49,30 +49,30 @@ class MusicDataset:
             - random_state: The seed used by the random number generator
             - shuffle: Whether or not to shuffle the data before splitting
             - swap_axes: Whether to swap the axes of the input data
-            - feature_to_drop: The list of features to drop from the input data
+            - features_to_drop: The list of features to drop from the input data
         """
 
         # converting the data to numpy arrays
         self.path_to_X = path_to_X
-        
+
         self.X_raw = pd.read_csv(self.path_to_X, index_col=0, header=[0, 1, 2])
-        
+
         if swap_axes:
-            # so that we have 
+            # so that we have
             # (group1), ..., (group11)
             # with each groups has [subgroup1,...,subgroupX]
             # subgroup consists of [kurtosis, mean, ..., std]
             # then can split into 7 x 74 = 518 features
             self.X = self.X_raw.swaplevel(axis=1).sort_index(axis=1)
-            
-        if feature_to_drop is not None:
-            print(f"Dropping features: {feature_to_drop}")
-            self.X = self.X_raw.drop(columns=feature_to_drop, axis=1)
-            print(f"New shape: {self.X.shape}")
-        
-        self.X = self.X.to_numpy()
 
-        self.y = pd.read_csv(path_to_y, index_col=0).squeeze("columns")
+        if features_to_drop is not None:
+            print(f"Dropping features: {features_to_drop}")
+            self.X = self.X_raw.drop(columns=features_to_drop, axis=1)
+            print(f"New shape: {self.X.shape}")
+
+        # self.X = self.X.to_numpy()
+
+        self.y = pd.read_csv(path_to_y, index_col=0)
 
         # encode y
         self.label_encoder = LabelEncoder()
@@ -84,14 +84,13 @@ class MusicDataset:
 
         # split data
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            self.X,
+            self.X_raw,
             self.y,
             test_size=self.test_size,
             random_state=self.random_state,
             shuffle=self.shuffle,
         )
 
-                
     def scale_data(self, X_train, X_test, y_train, y_test, scaler="standard"):
         """
         Scales the input data using the given scaler.
@@ -106,25 +105,46 @@ class MusicDataset:
         Returns:
             - X_train_scaled: The scaled training input data
             - X_test_scaled: The scaled test input data
+            - the returned arrays have the same type as the input arrays
         """
-        if scaler == "standard":
-            scaler = StandardScaler()
-        elif scaler == "minmax":
-            scaler = MinMaxScaler()
-        else:
-            raise ValueError("Invalid scaler type. Use 'standard' or 'minmax'.")
+        if isinstance(X_train, np.ndarray) and isinstance(X_test, np.ndarray):
+            if scaler == "standard":
+                scaler = StandardScaler()
+            elif scaler == "minmax":
+                scaler = MinMaxScaler()
+            else:
+                raise ValueError("Invalid scaler type. Use 'standard' or 'minmax'.")
 
-        # then scale (using the training data only)
-        # probably do not need copy
-        scaler.fit(X_train)
-        X_train_scaled = scaler.transform(X_train)
-        X_test_scaled = scaler.transform(X_test)
+            # then scale (using the training data only)
+            # probably do not need copy
+            scaler.fit(X_train)
+            X_train_scaled = scaler.transform(X_train)
+            X_test_scaled = scaler.transform(X_test)
+
+        else:
+            if scaler == "standard":
+                mean_train = X_train.mean()
+                std_train = X_train.std(ddof=0)
+                X_train_scaled = (X_train - mean_train) / std_train
+                X_test_scaled = (X_test - mean_train) / std_train
+            elif scaler == "minmax":
+                min_train = X_train.min()
+                max_train = X_train.max()
+                X_train_scaled = (X_train - min_train) / (max_train - min_train)
+                X_test_scaled = (X_test - min_train) / (max_train - min_train)
+            else:
+                raise ValueError("Invalid scaler type. Use 'standard' or 'minmax'.")
 
         return X_train_scaled, X_test_scaled
 
-
     def reduce_dimensions(
-        self, X_train, X_test, y_train, y_test, method="pca", n_components=2
+        self,
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+        method: str = "mrmr",
+        n_components: int = 2,
     ):
         """
         Reduces the dimensionality of the input data using the given method.
@@ -134,12 +154,12 @@ class MusicDataset:
             - X_test: The test input data
             - y_train: The training target data
             - y_test: The test target data
-            - method: The dimensionality reduction method (pca, lda)
+            - method: The dimensionality reduction method (pca, lda, mrmr), can be None
             - n_components: The number of components to keep
 
         Returns:
-            - X_train_reduced: The reduced training input data
-            - X_test_reduced: The reduced test input data
+            - X_train_reduced (np.ndarray): The reduced training input data
+            - X_test_reduced (np.ndarray): The reduced test input data
         """
 
         if method == "pca":
@@ -162,6 +182,12 @@ class MusicDataset:
             X_train_reduced = reducer.transform(X_train)
             X_test_reduced = reducer.transform(X_test)
 
+        elif method == "mrmr":
+            # the mrmr package defaults to using pandas dataframe
+            selected_features = mrmr_classif(X_train, y_train, K=n_components)
+            X_train_reduced = X_train[selected_features].to_numpy()
+            X_test_reduced = X_test[selected_features].to_numpy()
+
         else:
             raise ValueError("Invalid reduction method. Use 'pca' or 'lda'.")
 
@@ -180,68 +206,90 @@ class MusicDataset:
 
         Args:
             - scaler: The type of scaler to use (standard, minmax), can be None
-            - reduction_method: The dimensionality reduction method (pca, lda), can be None
+            - reduction_method: The dimensionality reduction method (pca, lda, mrmr), can be None
             - n_components: The number of components to keep
-            - k_fold_splits: The number of folds for k-fold cross-validatio
+            - k_fold_splits: The number of folds for k-fold cross-validatio, 0 for no cross-validation
             - use_all_data: Whether to use all the data for k-fold cross-validation
 
         Returns:
-            - X_train, X_test, y_train, y_test: if k_fold_splits=0
-            - k_fold_datasets: if k_fold_splits>0
+            One of the following:
+                - X_train, X_test, y_train, y_test: if k_fold_splits=0
+                - k_fold_datasets: if k_fold_splits>0
         """
+
         # scale the data
-        if scaler is not None:
-            try:
-                X_train_scaled, X_test_scaled = self.scale_data(
-                    self.X_train, self.X_test, self.y_train, self.y_test, scaler=scaler
-                )
-            except ValueError as e:
-                warnings.warn(str(e))
+        def get_data_no_cv():
+            if scaler is not None:
+                print(f"Scaling the data using {scaler} scaler.")
+                try:
+                    X_train_scaled, X_test_scaled = self.scale_data(
+                        self.X_train,
+                        self.X_test,
+                        self.y_train,
+                        self.y_test,
+                        scaler=scaler,
+                    )
+                except ValueError as e:
+                    warnings.warn(str(e))
+                    X_train_scaled, X_test_scaled = self.X_train, self.X_test
+
+            else:
+                print("No scaling applied.")
                 X_train_scaled, X_test_scaled = self.X_train, self.X_test
 
-        else:
-            print("No scaling applied.")
-            X_train_scaled, X_test_scaled = self.X_train, self.X_test
+            # TODO: does the order of scaling and reduction matter?
+            # reduce the dimensionality after scaling
 
-        # TODO: does the order of scaling and reduction matter?
-        # reduce the dimensionality after scaling
+            if reduction_method is not None:
+                print(f"Reducing the dimensionality using {reduction_method}.")
+                try:
+                    X_train_reduced, X_test_reduced = self.reduce_dimensions(
+                        X_train_scaled,
+                        X_test_scaled,
+                        self.y_train,
+                        self.y_test,
+                        method=reduction_method,
+                        n_components=n_components,
+                    )
+                except ValueError as e:
+                    warnings.warn(str(e))
+                    X_train_reduced, X_test_reduced = X_train_scaled, X_test_scaled
 
-        if reduction_method is not None:
-            try:
-                X_train_reduced, X_test_reduced = self.reduce_dimensions(
-                    X_train_scaled,
-                    X_test_scaled,
-                    self.y_train,
-                    self.y_test,
-                    method=reduction_method,
-                    n_components=n_components,
-                )
-            except ValueError as e:
-                warnings.warn(str(e))
+            else:
+                print("No dimensionality reduction applied.")
                 X_train_reduced, X_test_reduced = X_train_scaled, X_test_scaled
 
-        else:
-            print("No dimensionality reduction applied.")
-            X_train_reduced, X_test_reduced = X_train_scaled, X_test_scaled
+            # it is assumed that the reduced data is of type np.ndarray
+            if isinstance(X_train_reduced, np.ndarray) and isinstance(
+                X_test_reduced, np.ndarray
+            ):
+                X_train_out = X_train_reduced
+                X_test_out = X_test_reduced
+            else:
+                X_train_out = X_train_reduced.to_numpy()
+                X_test_out = X_test_reduced.to_numpy()
+            return X_train_out, X_test_out
 
         if k_fold_splits == 0:
-            return X_train_reduced, X_test_reduced, self.y_train, self.y_test
+            X_train_out, X_test_out = get_data_no_cv()
+            return X_train_out, X_test_out, self.y_train, self.y_test
         else:
+            print(f"Using {k_fold_splits}-fold cross-validation.")
             if use_all_data:
                 X_to_use = self.X
                 y_to_use = self.y
             else:
                 X_to_use = self.X_train
                 y_to_use = self.y_train
-                
+
             return self.get_k_fold_cv_iterator(
-                    X_to_use,
-                    y_to_use,
-                    scaler,
-                    reduction_method,
-                    n_components,
-                    k_fold_splits,
-                )
+                X_to_use,
+                y_to_use,
+                scaler,
+                reduction_method,
+                n_components,
+                k_fold_splits,
+            )
 
     def get_k_fold_cv_iterator(
         self,
@@ -269,7 +317,13 @@ class MusicDataset:
         kf = KFold(n_splits=n_splits)
 
         for train_index, val_index in kf.split(X_used):
-            X_train_fold, X_val_fold = X_used[train_index], X_used[val_index]
+            if isinstance(X_used, np.ndarray):
+                X_train_fold, X_val_fold = X_used[train_index], X_used[val_index]
+            else:
+                X_train_fold, X_val_fold = (
+                    X_used.iloc[train_index],
+                    X_used.iloc[val_index],
+                )
             y_train_fold, y_val_fold = y_used[train_index], y_used[val_index]
 
             try:
@@ -299,3 +353,35 @@ class MusicDataset:
                 "y_train": y_train_fold,
                 "y_val": y_val_fold,
             }
+
+
+# custom implementation of dimension reduction for sklearn.pipeline
+class CustomDimReduction(BaseEstimator, TransformerMixin):
+    """
+    A class for dimensionality reduction using PCA or LDA or mRMR.
+    """
+
+    def __init__(self, method, n_components):
+        self.method = method
+        self.n_components = n_components
+
+    def fit(self, X, y=None):
+        if self.method == "pca":
+            self.reducer = PCA(n_components=self.n_components)
+        elif self.method == "lda":
+            self.reducer = LinearDiscriminantAnalysis(n_components=self.n_components)
+        elif self.method == "mrmr":
+            self.reducer = mrmr_classif(X, y, K=self.n_components)
+        elif self.method is None:
+            self.reducer = None
+
+        self.reducer.fit(X, y)
+        return self
+
+    def transform(self, X):
+        if self.method == "mrmr":
+            return X[self.reducer].to_numpy()
+        elif self.method is None:
+            return X
+        else:
+            return self.reducer.transform(X)
