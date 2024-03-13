@@ -158,8 +158,8 @@ class MusicDataset:
             - n_components: The number of components to keep
 
         Returns:
-            - X_train_reduced (np.ndarray): The reduced training input data
-            - X_test_reduced (np.ndarray): The reduced test input data
+            - X_train_reduce: The reduced training input data
+            - X_test_reduce: The reduced test input data
         """
 
         if method == "pca":
@@ -260,14 +260,16 @@ class MusicDataset:
                 X_train_reduced, X_test_reduced = X_train_scaled, X_test_scaled
 
             # it is assumed that the reduced data is of type np.ndarray
-            if isinstance(X_train_reduced, np.ndarray) and isinstance(
-                X_test_reduced, np.ndarray
-            ):
-                X_train_out = X_train_reduced
-                X_test_out = X_test_reduced
-            else:
-                X_train_out = X_train_reduced.to_numpy()
-                X_test_out = X_test_reduced.to_numpy()
+            # if isinstance(X_train_reduced, np.ndarray) and isinstance(
+            #     X_test_reduced, np.ndarray
+            # ):
+            #     X_train_out = X_train_reduced
+            #     X_test_out = X_test_reduced
+            # else:
+            #     X_train_out = X_train_reduced
+            #     X_test_out = X_test_reduced.to_numpy()
+            X_train_out = X_train_reduced
+            X_test_out = X_test_reduced
             return X_train_out, X_test_out
 
         if k_fold_splits == 0:
@@ -356,32 +358,61 @@ class MusicDataset:
 
 
 # custom implementation of dimension reduction for sklearn.pipeline
+class _mrmr_classif(BaseEstimator, TransformerMixin):
+    def __init__(self, feature_columns, K):
+        self.feature_columns = feature_columns
+        self.K = K
+
+    def fit(self, X, y):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, columns=self.feature_columns)
+        if not isinstance(y, pd.Series):
+            y = pd.Series(y).values.reshape(-1, 1)
+        else:
+            y = y.values.reshape(-1, 1)
+        
+        self.selected_features = mrmr_classif(X, y, K=self.K)
+        return self
+
+    def transform(self, X):
+        if not isinstance(X, pd.DataFrame):
+            X = pd.DataFrame(X, columns=self.feature_columns)
+        out = X[self.selected_features].to_numpy()
+        return out
+
+
 class CustomDimReduction(BaseEstimator, TransformerMixin):
     """
     A class for dimensionality reduction using PCA or LDA or mRMR.
     """
 
-    def __init__(self, method, n_components):
+    def __init__(self, method, n_components, feature_columns=None):
         self.method = method
         self.n_components = n_components
+        self.feature_columns = feature_columns
 
-    def fit(self, X, y=None):
+        if feature_columns is None and method == "mrmr":
+            raise ValueError("feature_columns must be provided for mRMR method")
+
+    def fit(self, X, y):
         if self.method == "pca":
             self.reducer = PCA(n_components=self.n_components)
         elif self.method == "lda":
             self.reducer = LinearDiscriminantAnalysis(n_components=self.n_components)
         elif self.method == "mrmr":
-            self.reducer = mrmr_classif(X, y, K=self.n_components)
+            self.reducer = _mrmr_classif(
+                feature_columns=self.feature_columns, K=self.n_components
+            )
         elif self.method is None:
             self.reducer = None
+        else:
+            raise ValueError("Invalid reduction method. Use 'pca' or 'lda' or 'mrmr'.")
 
         self.reducer.fit(X, y)
         return self
 
     def transform(self, X):
-        if self.method == "mrmr":
-            return X[self.reducer].to_numpy()
-        elif self.method is None:
+        if self.method is None:
             return X
         else:
             return self.reducer.transform(X)
