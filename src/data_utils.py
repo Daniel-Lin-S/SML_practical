@@ -35,6 +35,8 @@ class MusicDataset:
         test_size=0.2,
         random_state=42,
         shuffle=False,
+        swap_axes=False,
+        feature_to_drop = None,
     ):
         """
         Initializes the dataset with the given data and target.
@@ -46,11 +48,29 @@ class MusicDataset:
                 if 0 then no test set
             - random_state: The seed used by the random number generator
             - shuffle: Whether or not to shuffle the data before splitting
+            - swap_axes: Whether to swap the axes of the input data
+            - feature_to_drop: The list of features to drop from the input data
         """
 
         # converting the data to numpy arrays
         self.path_to_X = path_to_X
-        self.X = pd.read_csv(self.path_to_X, index_col=0, header=[0, 1, 2]).to_numpy()
+        
+        self.X_raw = pd.read_csv(self.path_to_X, index_col=0, header=[0, 1, 2])
+        
+        if swap_axes:
+            # so that we have 
+            # (group1), ..., (group11)
+            # with each groups has [subgroup1,...,subgroupX]
+            # subgroup consists of [kurtosis, mean, ..., std]
+            # then can split into 7 x 74 = 518 features
+            self.X = self.X_raw.swaplevel(axis=1).sort_index(axis=1)
+            
+        if feature_to_drop is not None:
+            print(f"Dropping features: {feature_to_drop}")
+            self.X = self.X_raw.drop(columns=feature_to_drop, axis=1)
+            print(f"New shape: {self.X.shape}")
+        
+        self.X = self.X.to_numpy()
 
         self.y = pd.read_csv(path_to_y, index_col=0).squeeze("columns")
 
@@ -71,6 +91,7 @@ class MusicDataset:
             shuffle=self.shuffle,
         )
 
+                
     def scale_data(self, X_train, X_test, y_train, y_test, scaler="standard"):
         """
         Scales the input data using the given scaler.
@@ -101,8 +122,6 @@ class MusicDataset:
 
         return X_train_scaled, X_test_scaled
 
-    def extract_seven():
-        pass
 
     def reduce_dimensions(
         self, X_train, X_test, y_train, y_test, method="pca", n_components=2
