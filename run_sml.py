@@ -1,12 +1,11 @@
 """
 Run the entire pipeline.
-
 """
+
 import os
 import time
 import logging
 import argparse
-import warnings
 from packaging.version import Version
 
 import sklearn
@@ -71,29 +70,28 @@ def main():
         "--reduce_method",
         type=str,
         default="pca",
-        help="The method to reduce the dimensionality of the data",
+        help="The method to reduce the dimensionality of the data, one of lda, pca, mrmr, none",
     )
-    
+
     parser.add_argument(
         "--n_components",
         type=int,
         default=7,
         help="The number of components to reduce the data to",
     )
-    
+
     parser.add_argument(
         "--output_dir",
         type=str,
         default="configs/sml_configs/",
         help="The directory to save the best parameters to",
     )
-        
-    
+
     parser.add_argument(
         "--scaling_method",
         type=str,
         default="standard",
-        help="The type of scaler to use (standard, minmax)",
+        help="The type of scaler to use, one of (standard, minmax, none)",
     )
 
     parser.add_argument(
@@ -111,36 +109,40 @@ def main():
     )
 
     parser.add_argument(
-        "--cv", type=int, default=5, help="The number of folds in the cross-validation"
+        "--cv",
+        type=int,
+        default=5,
+        help="The number of folds in the cross-validation, default is 5",
     )
 
     parser.add_argument(
-        "--scoring", type=str, default="accuracy", help="The scoring metric to use"
+        "--scoring",
+        type=str,
+        default="accuracy",
+        help="The scoring metric to use, default is accuracy",
     )
 
     parser.add_argument(
-        "--n_jobs", type=int, default=-1, help="The number of jobs to run in parallel"
+        "--n_jobs",
+        type=int,
+        default=1,
+        help="The number of jobs to run in parallel, default is all cores",
     )
-    
+
     parser.add_argument(
-        "--use_default_drop",
+        "--use_feature_drop",
         type=bool,
-        default=True,
-        help="Whether or not to use the default drop",
+        default=False,
+        help="Whether or not to use the feature drop for first two features",
     )
-
-    # parser.add_argument(
-    #     "--ignore_warnings",
-    #     type=bool,
-    #     default=True,
-    #     help="Whether or not to ignore warnings",
-    # )
 
     args = parser.parse_args()
-    
-    if args.use_default_drop:
-        features_to_drop = ['chroma_cqt', 'chroma_cens']
-    
+
+    if args.use_feature_drop:
+        features_to_drop = ["chroma_cqt", "chroma_cens"]
+    else:
+        features_to_drop = None
+
     # load the data
     dataset = MusicDataset(
         path_to_X=PATH_to_X,
@@ -148,39 +150,43 @@ def main():
         test_size=args.test_size,
         random_state=args.random_state,
         shuffle=args.shuffle,
-        feature_to_drop=features_to_drop
+        features_to_drop=features_to_drop,
+        swap_axes=False,
     )
-    
-    reduction_method = args.reduce_method
-    
-    if reduction_method == "lda":
-        assert args.n_components <= 7, "The number of components for LDA must be less than or equal to 7"
 
-    
+    reduction_method = args.reduce_method
+
+    if reduction_method == "lda":
+        assert (
+            args.n_components <= 7
+        ), "The number of components for LDA must be less than or equal to 7"
+
     if reduction_method == "none":
         reduction_method = None
-        
+
     scaling_method = args.scaling_method
     if scaling_method == "none":
         scaling_method = None
-    
+
     # split the data
     X_train, X_test, y_train, y_test = dataset.get_data(
         scaler=None,
-        reduction_method=reduction_method,
-        n_components=args.n_components,
+        reduction_method=None,
     )
-    
-    print(f"Sanity check of shapes: {X_train.shape}, {X_test.shape}, {y_train.shape}, {y_test.shape}")
 
-    
+    print(
+        f"Sanity check of shapes: {X_train.shape}, {X_test.shape}, {y_train.shape}, {y_test.shape}"
+    )
+
     best_params = {}
-    
+
     for model_name in METHOD_DICT.keys():
         try:
             params_config = load_config(PATH_to_config)[model_name]
         except KeyError:
-            logging.error(f"Model name {model_name} not found in the config file, skipping...\n")
+            logging.error(
+                f"Model name {model_name} not found in the config file, skipping...\n"
+            )
             continue
 
         if model_name in KWARGS_FOR_GRID_SEARCH:
@@ -200,48 +206,50 @@ def main():
             scoring=args.scoring,
             n_jobs=args.n_jobs,
             ignore_warnings=True,
-            verbose = 3,
+            verbose=3,
             scaling_method=scaling_method,
+            reduction_method=reduction_method,
+            n_components=args.n_components,
             **kwargs,
         )
-        
+
         best_params[model_name] = best_model.best_params_
-        
+
         # evaluate the model and store in text file
         y_pred_test = best_model.predict(X_test)
         y_pred_train = best_model.predict(X_train)
-        report_test = classification_report(y_test, y_pred_test)
-        report_train = classification_report(y_train, y_pred_train)
-        
-        
+        report_test = classification_report(y_test, y_pred_test, digits=4)
+        report_train = classification_report(y_train, y_pred_train, digits=4)
+
         if not os.path.exists("reports"):
             os.makedirs("reports")
-            
-        with open(f"reports/Experiment_{model_name}_{args.reduce_method}_{args.n_components}.txt", "w") as file:
+
+        with open(
+            f"reports/Experiment_{model_name}_{args.reduce_method}_{args.n_components}.txt",
+            "w",
+        ) as file:
             file.write(f"Model: {model_name}\n")
             file.write(report_test)
             file.write("\n")
             file.write("=" * 50)
             file.write(f"Best parameters: {best_model.best_params_}\n")
             file.write("\n")
-            
+
             # some separator
             file.write("=" * 50)
             file.write("\n")
-            
+
             # get train accuracy
             file.write(f"Train report \n")
             file.write(report_train)
-            
+
         logging.info(f"Report for model {model_name} has been written")
-        
+
         # save the best parameters to a yaml file
-        out_dir_joint = os.path.join(args.output_dir, 
-                                        f"best_params_{model_name}.yaml")
+        out_dir_joint = os.path.join(args.output_dir, f"best_params_{model_name}.yaml")
         with open(out_dir_joint, "w") as file:
             yaml.dump(best_params, file)
-    
-    
+
+
 if __name__ == "__main__":
     main()
-            
