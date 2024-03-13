@@ -125,7 +125,7 @@ def main():
     parser.add_argument(
         "--use_default_drop",
         type=bool,
-        default=False,
+        default=True,
         help="Whether or not to use the default drop",
     )
 
@@ -148,6 +148,7 @@ def main():
         test_size=args.test_size,
         random_state=args.random_state,
         shuffle=args.shuffle,
+        feature_to_drop=features_to_drop
     )
     
     reduction_method = args.reduce_method
@@ -168,7 +169,6 @@ def main():
         scaler=None,
         reduction_method=reduction_method,
         n_components=args.n_components,
-        features_to_drop=features_to_drop,
     )
     
     print(f"Sanity check of shapes: {X_train.shape}, {X_test.shape}, {y_train.shape}, {y_test.shape}")
