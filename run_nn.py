@@ -248,8 +248,8 @@ def main():
             scheduler=scheduler,
             device=args.device,
             optimizer_name="adamW",
-            n_epochs=60,
-            patience=10,
+            n_epochs=600,
+            patience=20,
             verbose=0,
         )
 
