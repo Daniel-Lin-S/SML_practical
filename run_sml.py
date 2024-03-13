@@ -84,7 +84,7 @@ def main():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="configs/sml_configs/sml_configs_test.yaml",
+        default="configs/sml_configs/",
         help="The directory to save the best parameters to",
     )
         
@@ -121,6 +121,13 @@ def main():
     parser.add_argument(
         "--n_jobs", type=int, default=-1, help="The number of jobs to run in parallel"
     )
+    
+    parser.add_argument(
+        "--use_default_drop",
+        type=bool,
+        default=False,
+        help="Whether or not to use the default drop",
+    )
 
     # parser.add_argument(
     #     "--ignore_warnings",
@@ -130,7 +137,10 @@ def main():
     # )
 
     args = parser.parse_args()
-
+    
+    if args.use_default_drop:
+        features_to_drop = ['chroma_cqt', 'chroma_cens']
+    
     # load the data
     dataset = MusicDataset(
         path_to_X=PATH_to_X,
@@ -158,7 +168,10 @@ def main():
         scaler=None,
         reduction_method=reduction_method,
         n_components=args.n_components,
+        features_to_drop=features_to_drop,
     )
+    
+    print(f"Sanity check of shapes: {X_train.shape}, {X_test.shape}, {y_train.shape}, {y_test.shape}")
 
     
     best_params = {}
@@ -223,7 +236,9 @@ def main():
         logging.info(f"Report for model {model_name} has been written")
         
     # save the best parameters to a yaml file
-    with open(args.output_dir, "w") as file:
+    out_dir_joint = os.path.join(args.output_dir, 
+                                     f"best_params_{model_name}.yaml")
+    with open(out_dir_joint, "w") as file:
         yaml.dump(best_params, file)
     
     
