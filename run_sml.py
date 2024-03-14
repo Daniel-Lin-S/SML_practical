@@ -135,6 +135,13 @@ def main():
         default=False,
         help="Whether or not to use the feature drop for first two features",
     )
+    
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="The device to use for training the model",
+    )
 
     args = parser.parse_args()
 
@@ -193,7 +200,15 @@ def main():
             kwargs = KWARGS_FOR_GRID_SEARCH[model_name]
         else:
             kwargs = {}
+        
+        # torch wrapper requires the input dimension
+        if model_name == "mlp":
+            if reduction_method is None:
+                kwargs["input_dim"] = X_train.shape[1]
+            else:
+                kwargs["input_dim"] = args.n_components
 
+        logging.info(f"The parameters for model {model_name} are {kwargs}")
         logging.info(f"Running grid search for model {model_name}")
 
         best_model, time_elapsed = grid_search_cv(
