@@ -18,6 +18,9 @@ except ImportError:
 from sklearn.decomposition import PCA
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
+# feature selection
+from sklearn.feature_selection import SelectKBest, mutual_info_classif
+
 
 class MusicDataset:
     """
@@ -63,11 +66,11 @@ class MusicDataset:
             # with each groups has [subgroup1,...,subgroupX]
             # subgroup consists of [kurtosis, mean, ..., std]
             # then can split into 7 x 74 = 518 features
-            self.X = self.X_raw.swaplevel(axis=1).sort_index(axis=1)
+            self.X_raw = self.X_raw.swaplevel(axis=1).sort_index(axis=1)
 
         if features_to_drop is not None:
             print(f"Dropping features: {features_to_drop}")
-            self.X = self.X_raw.drop(columns=features_to_drop, axis=1)
+            self.X_raw = self.X_raw.drop(columns=features_to_drop, axis=1)
             print(f"New shape: {self.X.shape}")
 
         # self.X = self.X.to_numpy()
@@ -370,7 +373,7 @@ class _mrmr_classif(BaseEstimator, TransformerMixin):
             y = pd.Series(y).values.reshape(-1, 1)
         else:
             y = y.values.reshape(-1, 1)
-        
+
         self.selected_features = mrmr_classif(X, y, K=self.K)
         return self
 
@@ -383,7 +386,7 @@ class _mrmr_classif(BaseEstimator, TransformerMixin):
 
 class CustomDimReduction(BaseEstimator, TransformerMixin):
     """
-    A class for dimensionality reduction using PCA or LDA or mRMR.
+    A class for dimensionality reduction using PCA or LDA or or IGR or mRMR.
     """
 
     def __init__(self, method, n_components, feature_columns=None):
@@ -399,6 +402,8 @@ class CustomDimReduction(BaseEstimator, TransformerMixin):
             self.reducer = PCA(n_components=self.n_components)
         elif self.method == "lda":
             self.reducer = LinearDiscriminantAnalysis(n_components=self.n_components)
+        elif self.method == "igr":
+            self.reducer = SelectKBest(mutual_info_classif, k=self.n_components)
         elif self.method == "mrmr":
             self.reducer = _mrmr_classif(
                 feature_columns=self.feature_columns, K=self.n_components
