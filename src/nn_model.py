@@ -9,6 +9,13 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
+from torch.utils.data import Dataset, DataLoader
+
+# wrap for sklearn
+from sklearn.base import BaseEstimator, ClassifierMixin
+from src.dataloader import MusicData
+from src.data_utils import MusicDataset
+from src.train_nn import *
 
 
 class PatchEmbedding(nn.Module):
@@ -110,10 +117,11 @@ class MLP(nn.Module):
             - n_embed_dim (int): Dimensionality of the embedding.
             - hidden_dims (list): List of integers representing the sizes of hidden layers.
             - dropout (float): Dropout rate.
-            - activation (str): Activation function to use ("tanh" or "relu")
+            - activation (str): Activation function to use ("tanh" or "relu" or "sigmoid").
             - use_patch_embedding (bool): Whether to use the PatchEmbedding layer.
         """
-        super(MLP, self).__init__()
+        super().__init__()
+        
         assert len(hidden_dims) > 0, "hidden_dims should have at least one element"
 
         if use_patch_embedding:
@@ -140,6 +148,8 @@ class MLP(nn.Module):
                 layers.append(nn.ReLU())
             elif activation.lower() == "tanh":
                 layers.append(nn.Tanh())
+            elif activation.lower() == "sigmoid":
+                layers.append(nn.Sigmoid())
             else:
                 raise ValueError(f"Activation function {activation} not supported")
             if dropout > 0:
@@ -225,6 +235,7 @@ class ResNet(nn.Module):
         self,
         input_dim,
         output_dim,
+        final_layer_dim,
         n_groups,
         n_features_per_group,
         n_embed_dim,
@@ -240,6 +251,7 @@ class ResNet(nn.Module):
         Args:
             - input_dim (int): The dimensionality of the input tensor
             - output_dim (int): The dimensionality of the output classes
+            - final_layer_dim (int): The dimensionality of the final layer
             - n_groups (int): The number of feature groups
             - n_features_per_group (list): The number of features in each group
             - n_embed_dim (int): The dimensionality of the embedding
@@ -251,7 +263,9 @@ class ResNet(nn.Module):
         """
 
         super().__init__()
-
+        
+        self.dropout = dropout
+        
         if use_patch_embedding:
             self.patch_embedding = PatchEmbedding(
                 input_dim=input_dim,
@@ -278,7 +292,8 @@ class ResNet(nn.Module):
         )
 
         # prediction layer
-        self.output_layer = nn.Linear(block_size, output_dim)
+        self.penultimate_layer = nn.Linear(block_size, final_layer_dim)
+        self.output_layer = nn.Linear(final_layer_dim, output_dim)
 
     def forward(self, x):
         """
@@ -293,6 +308,10 @@ class ResNet(nn.Module):
         for block in self.resnet_blocks:
             x = block(x)
 
+        x = self.penultimate_layer(x)
+        x = F.relu(x)
+        # x = nn.Dropout(self.dropout)(x)
+        
         x = self.output_layer(x)
 
         return x
@@ -652,3 +671,131 @@ class GroupedFeaturesTransformer(nn.Module):
         # Classifier
         x = self.classifier(x)
         return x
+
+class SklearnWrappedMLP(BaseEstimator, ClassifierMixin):
+    """
+    Wrapper for MLP model to use in sklearn pipeline.
+    """
+
+    def __init__(
+        self,
+        input_dim,
+        output_dim=8,
+        n_groups=11,
+        n_features_per_group=[84, 84, 84, 140, 7, 7, 7, 49, 7, 42, 7],
+        n_embed_dim=8,
+        hidden_dims=[32, 64, 128],
+        dropout=0.0,
+        activation="relu",
+        use_patch_embedding=False,
+        batch_size=64,
+        epochs = 100,
+        patience = 20,
+        device = "cpu"
+    ):
+        """
+        Initializes the MLP model.
+        Args:
+            - input_dim (int): Dimensionality of input features.
+            - output_dim (int): Dimensionality of output classes.
+            - n_groups (int): Number of feature groups.
+            - n_features_per_group (list): Number of features in each group.
+            - n_embed_dim (int): Dimensionality of the embedding.
+            - hidden_dims (list): List of integers representing the sizes of hidden layers.
+            - dropout (float): Dropout rate.
+            - activation (str): Activation function to use ("tanh" or "relu" or "sigmoid").
+            - use_patch_embedding (bool): Whether to use the PatchEmbedding layer.
+            - batch_size (int): The batch size for training.
+            - epochs (int): Number of epochs to train the model.
+            - patience (int): Number of epochs to wait before early stopping.
+            - device (str): The device to use for training.
+        """
+        
+        # configure the model
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.n_groups = n_groups
+        self.n_features_per_group = n_features_per_group
+        self.n_embed_dim = n_embed_dim
+        self.hidden_dims = hidden_dims
+        self.dropout = dropout
+        self.activation = activation
+        self.use_patch_embedding = use_patch_embedding
+        
+        # configure the training
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.patience = patience
+        self.device = device
+
+        self.model = MLP(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            n_groups=n_groups,
+            n_features_per_group=n_features_per_group,
+            n_embed_dim=n_embed_dim,
+            hidden_dims=hidden_dims,
+            dropout=dropout,
+            activation=activation,
+            use_patch_embedding=use_patch_embedding,
+        )
+
+    def fit(self, X, y):
+        """
+        Fits the model to the given data.
+        Args:
+            - X (np.ndarray): The input data.
+            - y (np.ndarray): The labels.
+        Returns:
+            - self
+        """
+        # convert to torch tensors
+        X = torch.tensor(X, dtype=torch.float32)
+        y = torch.tensor(y, dtype=torch.long)
+
+        # train the model
+        train_loader = DataLoader(
+            MusicData(X, y), batch_size=self.batch_size, shuffle=True, num_workers=0
+        )
+        
+
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=0.001)
+        
+        self.model.to(self.device)
+        
+        for epoch in range(self.epochs):
+            train_loss, train_acc = train(
+                model=self.model,
+                train_loader=train_loader,
+                optimizer=optimizer,
+                loss_function=nn.CrossEntropyLoss(),
+                scheduler=None,
+                device=self.device,
+            )
+        
+        return self
+    
+    def predict(self, X):
+        """
+        Predicts the labels for the given data.
+        Args:
+            - X (np.ndarray): The input data.
+        Returns:
+            - y_pred (np.ndarray): The predicted labels.
+        """
+        # convert to torch tensor
+        X = torch.tensor(X, dtype=torch.float32, device=self.device)
+
+        # predict
+        with torch.no_grad():
+            self.model.eval()
+            try:
+                y_pred = self.model(X).argmax(dim=1).numpy()
+            except:
+                y_pred = self.model(X).cpu().argmax(dim=1).numpy()
+
+        return y_pred
+    
+    def score(self, X, y):
+        predictions = self.predict(X)
+        return np.mean(predictions == y)

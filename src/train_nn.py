@@ -26,11 +26,14 @@ def train(model, train_loader, optimizer, loss_function, scheduler=None, device=
         - scheduler: Learning rate scheduler
 
     Returns:
-        The average loss over the training data.
+        - The average loss over the training data.
+        - The average accuracy over the training data.
     """
     model.train()
     total_loss = 0
+    total_accuracy = 0
     for X, y in train_loader:
+        model.train()
         X = X.to(device)
         y = y.to(device)
         optimizer.zero_grad()
@@ -43,12 +46,20 @@ def train(model, train_loader, optimizer, loss_function, scheduler=None, device=
         optimizer.step()
         total_loss += loss.item()
 
+        model.eval()
+        _, predicted = torch.max(output, 1)
+        correct = (predicted == y).sum().item()
+
+        total_accuracy += correct / y.size(0)
+
     # Step the scheduler
     if scheduler is not None:
         scheduler.step()
 
     avg_loss = total_loss / len(train_loader)
-    return avg_loss
+    avg_accuracy = total_accuracy / len(train_loader)
+
+    return avg_loss, avg_accuracy
 
 
 def validate(model, val_loader, loss_function, device="cpu"):
@@ -160,14 +171,14 @@ def run_training_loop(
     wait = 0
 
     for epoch in range(num_epochs):
-        train_loss = train(
+        train_loss, train_acc = train(
             model, train_loader, optimizer, loss_function, scheduler, device
         )
         val_loss, val_acc = validate(model, val_loader, loss_function, device)
 
         if verbose > 0 and epoch % verbose == 0:
             logging.info(
-                f"Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%"
+                f"Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, train Acc: {train_acc*100:.2f}%, val Acc: {val_acc*100:.2f}%"
             )
             # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
 

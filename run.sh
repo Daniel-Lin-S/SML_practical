@@ -4,24 +4,29 @@
 
 
 # Install dependencies
+pip install --user --upgrade pip
 pip install --user -r requirements.txt
 
 # Base directory for output
 base_dir="configs/sml_configs"
 
+#device
+
 # Ensure the base directory exists
 mkdir -p "$base_dir"
 
 # Loop through reduce_method options
-for reduce_method in lda pca mrmr none; do # lda pca none mrmr
+for reduce_method in lda pca igr mrmr none; do # lda pca none mrmr igr
     # Define n_components array based on the reduce_method
     if [ "$reduce_method" = "pca" ]; then
-        # declare -a n_components=(20 30 40 50 100)
-        declare -a n_components=(5)
+        declare -a n_components=(7 20 50 100 250)
+        # declare -a n_components=(5)
     elif [ "$reduce_method" = "lda" ]; then
         declare -a n_components=(7)
+    elif [ "$reduce_method" = "igr" ]; then
+        declare -a n_components=(7 20 50 100 250)
     elif [ "$reduce_method" = "mrmr" ]; then
-        declare -a n_components=(5)
+        declare -a n_components=(7 20 50 100 250)
     else
         # For 'none', we don't need to specify n_components, but we'll run it once for consistency
         declare -a n_components=(none)
