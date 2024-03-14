@@ -16,6 +16,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from src.dataloader import MusicData
 from src.data_utils import MusicDataset
 from src.train_nn import *
+import torch
 
 
 class PatchEmbedding(nn.Module):
@@ -679,8 +680,6 @@ class BetaVAE(nn.Module):
                  latent_dim = 8, 
                 #  activation = "relu",
                 dropout = 0.0,
-                beta = 1.0,
-                
                  hidden_dims = [64, 32]):
         """
         Initializes the VAE model.   
@@ -689,7 +688,6 @@ class BetaVAE(nn.Module):
             - input_dim (int): Dimensionality of input features.
             - latent_dim (int): Dimensionality of the latent space.
             - dropout (float): Dropout rate.
-            - beta (float): penalty term for the KL divergence.
             - hidden_dims (list): List of integers representing the sizes of hidden layers.
         """
         super().__init__()
@@ -697,28 +695,28 @@ class BetaVAE(nn.Module):
         self.input_dim = input_dim
         self.latent_dim = latent_dim
         self.dropout = dropout
-        self.beta = beta
-        n_hidden = len(hidden_dims)
+        # self.beta = beta
+        self.encoder_hidden_dims = [input_dim] + hidden_dims + [latent_dim * 2]
+        self.decoder_hidden_dims = [latent_dim] + hidden_dims[::-1] + [input_dim]
         
         encoder_layers = []
         decoder_layers = []
         
-        for h_dim in hidden_dims:
-            encoder_layers.append(nn.Linear(input_dim, h_dim))
+        # Encoder
+        for i in range(len(self.encoder_hidden_dims) - 1):
+            encoder_layers.append(nn.Linear(self.encoder_hidden_dims[i], self.encoder_hidden_dims[i + 1]))
             encoder_layers.append(nn.ReLU())
             if self.dropout > 0:
                 encoder_layers.append(nn.Dropout(dropout))
-            input_dim = h_dim
-            
         self.encoder = nn.Sequential(*encoder_layers)
         
-        for h_dim in hidden_dims[::-1]:
-            decoder_layers.append(nn.Linear(h_dim, input_dim))
+        # Decoder
+        for i in range(len(self.decoder_hidden_dims) - 1):
+            decoder_layers.append(nn.Linear(self.decoder_hidden_dims[i], self.decoder_hidden_dims[i + 1]))
             decoder_layers.append(nn.ReLU())
             if self.dropout > 0:
                 decoder_layers.append(nn.Dropout(dropout))
-            input_dim = h_dim
-            
+                
         self.decoder = nn.Sequential(*decoder_layers)
         
     def _reparametrize(self, mu, logvar):
@@ -745,19 +743,19 @@ class BetaVAE(nn.Module):
         x = self.decoder(z)
         return x, mu, logvar
     
-    def loss_function(self, x_true, reconstruction, log_var, mu):
-        """Implement the loss function for the VAE."""  
-        recons_loss = F.mse_loss(reconstruction, x_true)
-        kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
-        loss = recons_loss + self.beta * kld_loss
-        return {'loss': loss, 'Reconstruction_Loss': recons_loss, 'KLD': kld_loss}
-    
-    def sample_latents(self, x, num_samples = 10):
+    def sample_latents(self, x):
         """Sample from the latent space."""
         mu, logvar = torch.chunk(self.encoder(x), 2, dim=-1)
         z = self._reparametrize(mu, logvar)
         return z
 
+
+def vae_loss_function(x_true, reconstruction, log_var, mu, beta):
+        """Implement the loss function for the VAE."""  
+        recons_loss = torch.nn.functional.mse_loss(reconstruction, x_true)
+        kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+        loss = recons_loss + beta * kld_loss * 0.1
+        return {'loss': loss, 'Reconstruction_Loss': recons_loss, 'KLD': kld_loss}
 
 class SklearnWrappedMLP(BaseEstimator, ClassifierMixin):
     """
@@ -886,5 +884,56 @@ class SklearnWrappedMLP(BaseEstimator, ClassifierMixin):
     def score(self, X, y):
         predictions = self.predict(X)
         return np.mean(predictions == y)
+    
+    
+
+# class CyclicAnnealingScheme:
+#     """Implements the cyclic annealing scheme for beta-VAE."""
+#     def __init__(self, 
+#                  min_beta, 
+#                  max_beta, 
+#                  period, 
+#                  total_steps,
+#                  start_step=0):
+#         """
+#         Args:   
+#             - min_beta (float): The minimum value of beta.
+#             - max_beta (float): The maximum value of beta.
+#             - period (int): The period of the cycle.
+#             - total_steps (int): The total number of steps.
+#             - start_step (int): The starting step.
+#         """
+#         self.min_beta = min_beta
+#         self.max_beta = max_beta
+#         self.period = period
+#         self.total_steps = total_steps
+#         self.start_step = start_step
+    
+#     def get_beta(self, current_step):
+#         if current_step < self.start_step:
+#             return self.min_beta
+#         cycle = np.floor(1 + (current_step - self.start_step) / (2 * self.period))
+#         x = np.abs((current_step - self.start_step) / self.period - 2 * cycle + 1)
+#         beta = self.min_beta + (self.max_beta - self.min_beta) * np.maximum(0, (1 - x))
+#         return beta
+
+
+class MonotonicAnnealingScheme:
+    """Implements the monotonic annealing scheme for beta-VAE."""
+    def __init__(self, start_beta, end_beta, total_steps, increasing=True):
+        self.start_beta = start_beta
+        self.end_beta = end_beta
+        self.total_steps = total_steps
+        self.increasing = increasing
+    
+    def get_beta(self, current_step):
+        progress = current_step / self.total_steps
+        if self.increasing:
+            beta = self.start_beta + (self.end_beta - self.start_beta) * progress
+        else:
+            beta = self.end_beta - (self.end_beta - self.start_beta) * progress
+        return beta
+
+
     
     

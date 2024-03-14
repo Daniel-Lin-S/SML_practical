@@ -6,6 +6,8 @@ import argparse
 import logging
 import torch
 from sklearn.metrics import accuracy_score
+from src.nn_model import MonotonicAnnealingScheme
+from src.nn_model import vae_loss_function
 
 """A training function for a simple neural network."""
 
@@ -116,6 +118,9 @@ def run_training_loop(
     verbose=5,
     write_logs=True,
     patience=10,
+    train_function=train,
+    val_function=validate,
+    annealing_scheme="monotonic",
 ):
     """
     Runs the training loop for a given number of epochs.
@@ -136,6 +141,8 @@ def run_training_loop(
                         if is 0, no logs will be printed.
         - write_logs (bool): Write training and validation logs to text files
         - patience (int): Number of epochs to wait before early stopping
+        - train_function: Function to train the model
+        - val_function: Function to validate the model
 
     Returns:
         - list1: Training losses
@@ -143,8 +150,10 @@ def run_training_loop(
     """
 
     TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
-    
-    if loss_function is None and not model.__name__ == "BetaVAE":
+
+    training_vae = True if model.__class__.__name__ == "BetaVAE" else False
+
+    if loss_function is None and not model.__class__.__name__ == "BetaVAE":
         raise ValueError("Loss function is required for training")
 
     # Set up logging
@@ -174,32 +183,76 @@ def run_training_loop(
     wait = 0
 
     for epoch in range(num_epochs):
-        train_loss, train_acc = train(
-            model, train_loader, optimizer, loss_function, scheduler, device
-        )
-        val_loss, val_acc = validate(model, val_loader, loss_function, device)
 
-        if verbose > 0 and epoch % verbose == 0:
-            logging.info(
-                f"Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, train Acc: {train_acc*100:.2f}%, val Acc: {val_acc*100:.2f}%"
+        if not training_vae:
+            train_loss, train_acc = train_function(
+                model, train_loader, optimizer, loss_function, scheduler, device
             )
-            # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
+            val_loss, val_acc = val_function(model, val_loader, loss_function, device)
 
-        if val_acc > best_val_acc:
-            logging.info(f"Saving model with acc {val_acc}")
-            torch.save(model.state_dict(), os.path.join(save_path, model_name))
-            best_val_loss = val_loss
-            best_val_acc = val_acc
-            wait = 0
+            if verbose > 0 and epoch % verbose == 0:
+                logging.info(
+                    f"Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, train Acc: {train_acc*100:.2f}%, val Acc: {val_acc*100:.2f}%"
+                )
+                # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
+
+            if val_acc > best_val_acc:
+                logging.info(f"Saving model with acc {val_acc}")
+                torch.save(model.state_dict(), os.path.join(save_path, model_name))
+                best_val_loss = val_loss
+                best_val_acc = val_acc
+                wait = 0
+            else:
+                wait += 1
+                if wait > patience:
+                    logging.info(f"Early stopping at epoch {epoch+1}")
+                    break
+
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+            val_accs.append(val_acc)
+
         else:
-            wait += 1
-            if wait > patience:
-                logging.info(f"Early stopping at epoch {epoch+1}")
-                break
+            # Train VAE
+            train_loss, train_recon_loss, train_KLD = train_vae(
+                model,
+                train_loader,
+                optimizer,
+                annealing_scheme,
+                device,
+                current_epoch=epoch,
+                max_epochs=num_epochs,
+            )
 
-        train_losses.append(train_loss)
-        val_losses.append(val_loss)
-        val_accs.append(val_acc)
+            val_loss, val_recon_loss, val_KLD = validate_vae(
+                model,
+                val_loader,
+                device,
+                annealing_scheme=annealing_scheme,
+                max_epochs=num_epochs,
+                current_epoch=epoch,
+            )
+
+            if verbose > 0 and epoch % verbose == 0:
+                logging.info(
+                    f"Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, train Recon Loss: {train_recon_loss:.4f}, val Recon Loss: {val_recon_loss:.4f}, train KLD: {train_KLD:.4f}, val KLD: {val_KLD:.4f}"
+                )
+                # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
+
+            if val_recon_loss < best_val_loss:
+                logging.info(f"Saving model with recon loss {val_recon_loss}")
+                torch.save(model.state_dict(), os.path.join(save_path, model_name))
+                best_val_loss = val_recon_loss
+                wait = 0
+
+            else:
+                wait += 1
+                if wait > patience:
+                    logging.info(f"Early stopping at epoch {epoch+1}")
+                    break
+
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
 
     logging.info(f"Training complete. Model saved to {save_path}")
 
@@ -232,61 +285,121 @@ def run_training_loop(
     return train_losses, val_losses, val_accs
 
 
-def train_vae(model, train_loader, optimizer, loss_function, device="mps"):
+def train_vae(
+    model,
+    train_loader,
+    optimizer,
+    annealing_scheme=None,
+    device="mps",
+    current_epoch=0,
+    max_epochs=1000,
+):
     """
     Trains the VAE model using the given data and optimizer.
 
-    Args:  
+    Args:
         - model: The VAE model
         - train_loader: DataLoader for training data
         - optimizer: Optimization algorithm in torch.optim
-        - loss_function: Loss function
+        - scheduler: Learning rate scheduler
+        - device: Device to perform computations
+        - annealing_scheme: The annealing scheme to use for the KLD loss
+        - current_epoch: The current epoch
+        - max_epochs: The maximum number of epochs
 
-    Returns:  
+    Returns:
         - The average loss over the training data.
+        - The average reconstruction loss over the training data.
+        - The average KLD loss over the training data.
     """
     model.train()
     total_loss = 0
+    total_reconstruction_loss = 0
+    total_KLD = 0
+    if annealing_scheme == "monotonic":
+        annealing_scheme = MonotonicAnnealingScheme(
+            start_beta=0.001, end_beta=1.0, total_steps=max_epochs, increasing=True
+        )
+    else:
+        beta = 1.0
     for X, y in train_loader:
         X = X.to(device)
         y = y.to(device)
         optimizer.zero_grad()
         output, mu, logvar = model(X)
-        loss = loss_function(X, output, mu, logvar)
+        if annealing_scheme is not None:
+            beta = annealing_scheme.get_beta(current_epoch)
+        
+        all_loss = vae_loss_function(X, output, logvar, mu, beta)
+        
+        loss = all_loss["loss"]
+        reconstruction_loss = all_loss["Reconstruction_Loss"]
+        KLD = all_loss["KLD"]
 
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
+        total_reconstruction_loss += reconstruction_loss.item()
+        total_KLD += KLD.item()
 
     avg_loss = total_loss / len(train_loader)
+    avg_loss_reconstruction = total_reconstruction_loss / len(train_loader)
+    avg_loss_KLD = total_KLD / len(train_loader)
 
-    return avg_loss, None
+    return avg_loss, avg_loss_reconstruction, avg_loss_KLD
 
 
-def validate_vae(model, val_loader, loss_function, device="cpu"):
+def validate_vae(
+    model,
+    val_loader,
+    device="cpu",
+    annealing_scheme="monotonic",
+    max_epochs=1000,
+    current_epoch=0,
+):
     """
     Evaluates the VAE model using the given data.
 
-    Args:  
+    Args:
         - model: The VAE model
         - val_loader: DataLoader for validation data
-        - loss_function: Loss function
         - device: Device to perform computations
 
-    Returns:  
+    Returns:
         - avg_loss: The average loss over the validation data.
+        - avg_loss_reconstruction: The average reconstruction loss over the validation data.
+        - avg_loss_KLD: The average KLD loss over the validation data.
     """
     model.eval()
     total_loss = 0
+    total_reconstruction_loss = 0
+    total_KLD = 0
+
+    if annealing_scheme == "monotonic":
+        annealing_scheme = MonotonicAnnealingScheme(
+            start_beta=0.001, end_beta=1.0, total_steps=max_epochs, increasing=True
+        )
+    else:
+        beta = 1.0
 
     with torch.no_grad():
         for X, y in val_loader:
             X = X.to(device)
             y = y.to(device)
             output, mu, logvar = model(X)
-            loss = loss_function(X, output, mu, logvar)
+
+            if annealing_scheme is not None:
+                beta = annealing_scheme.get_beta(current_epoch)
+
+            all_loss = vae_loss_function(X, output, logvar, mu, beta)
+            loss = all_loss["loss"]
+            reconstruction_loss = all_loss["Reconstruction_Loss"]
+            KLD = all_loss["KLD"]
             total_loss += loss.item()
+            total_reconstruction_loss += reconstruction_loss.item()
+            total_KLD += KLD.item()
 
     avg_loss = total_loss / len(val_loader)
-
-    return avg_loss, None
+    avg_loss_reconstruction = total_reconstruction_loss / len(val_loader)
+    avg_loss_KLD = total_KLD / len(val_loader)
+    return avg_loss, avg_loss_reconstruction, avg_loss_KLD
