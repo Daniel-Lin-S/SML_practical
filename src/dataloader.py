@@ -16,6 +16,11 @@ class MusicData(Dataset):
             le = LabelEncoder()
             y = le.fit_transform(y)
         
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
+        if isinstance(y, pd.Series):
+            y = y.to_numpy()
+            
         self.X = torch.tensor(X, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.long)
         
