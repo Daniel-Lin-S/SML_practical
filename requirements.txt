@@ -2,6 +2,7 @@
 matplotlib
 matplotlib-inline
 
+mrmr-selection
 
 numpy
 
