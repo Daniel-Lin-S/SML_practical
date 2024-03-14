@@ -25,6 +25,7 @@ from sklearn.exceptions import ConvergenceWarning
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from src.data_utils import CustomDimReduction
+from src.nn_model import SklearnWrappedMLP
 
 
 METHOD_DICT = {
@@ -37,6 +38,7 @@ METHOD_DICT = {
     "c_svm": SVC,
     "xgboost": XGBClassifier,
     "xgboost_rf": XGBRFClassifier,
+    "mlp": SklearnWrappedMLP,
 }
 
 
@@ -89,6 +91,7 @@ def grid_search_cv(
         - scaling_method: The method to use for scaling the data
         - reduction_method: The method to use for dimensionality reduction
         - n_components: The number of components to reduce to
+        - kwargs: Additional keyword arguments for the model
 
     Returns:
         - GridSearchCV object
