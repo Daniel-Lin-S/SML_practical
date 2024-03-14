@@ -18,5 +18,7 @@ seaborn
 
 setuptools
 
+torch
+
 xgboost
 
