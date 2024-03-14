@@ -108,7 +108,7 @@ def run_training_loop(
     val_loader,
     model,
     optimizer,
-    loss_function,
+    loss_function=None,
     scheduler=None,
     model_name="model.pth",
     save_path=None,
@@ -143,6 +143,9 @@ def run_training_loop(
     """
 
     TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
+    
+    if loss_function is None and not model.__name__ == "BetaVAE":
+        raise ValueError("Loss function is required for training")
 
     # Set up logging
     train_losses = []
@@ -227,3 +230,63 @@ def run_training_loop(
                 f.write("%s\n" % item)
 
     return train_losses, val_losses, val_accs
+
+
+def train_vae(model, train_loader, optimizer, loss_function, device="mps"):
+    """
+    Trains the VAE model using the given data and optimizer.
+
+    Args:  
+        - model: The VAE model
+        - train_loader: DataLoader for training data
+        - optimizer: Optimization algorithm in torch.optim
+        - loss_function: Loss function
+
+    Returns:  
+        - The average loss over the training data.
+    """
+    model.train()
+    total_loss = 0
+    for X, y in train_loader:
+        X = X.to(device)
+        y = y.to(device)
+        optimizer.zero_grad()
+        output, mu, logvar = model(X)
+        loss = loss_function(X, output, mu, logvar)
+
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+
+    avg_loss = total_loss / len(train_loader)
+
+    return avg_loss, None
+
+
+def validate_vae(model, val_loader, loss_function, device="cpu"):
+    """
+    Evaluates the VAE model using the given data.
+
+    Args:  
+        - model: The VAE model
+        - val_loader: DataLoader for validation data
+        - loss_function: Loss function
+        - device: Device to perform computations
+
+    Returns:  
+        - avg_loss: The average loss over the validation data.
+    """
+    model.eval()
+    total_loss = 0
+
+    with torch.no_grad():
+        for X, y in val_loader:
+            X = X.to(device)
+            y = y.to(device)
+            output, mu, logvar = model(X)
+            loss = loss_function(X, output, mu, logvar)
+            total_loss += loss.item()
+
+    avg_loss = total_loss / len(val_loader)
+
+    return avg_loss, None

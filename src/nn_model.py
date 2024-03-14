@@ -672,6 +672,93 @@ class GroupedFeaturesTransformer(nn.Module):
         x = self.classifier(x)
         return x
 
+class BetaVAE(nn.Module):
+    """Implementation of BetaVAE model."""
+    def __init__(self, 
+                 input_dim, 
+                 latent_dim = 8, 
+                #  activation = "relu",
+                dropout = 0.0,
+                beta = 1.0,
+                
+                 hidden_dims = [64, 32]):
+        """
+        Initializes the VAE model.   
+        
+        Args:  
+            - input_dim (int): Dimensionality of input features.
+            - latent_dim (int): Dimensionality of the latent space.
+            - dropout (float): Dropout rate.
+            - beta (float): penalty term for the KL divergence.
+            - hidden_dims (list): List of integers representing the sizes of hidden layers.
+        """
+        super().__init__()
+        
+        self.input_dim = input_dim
+        self.latent_dim = latent_dim
+        self.dropout = dropout
+        self.beta = beta
+        n_hidden = len(hidden_dims)
+        
+        encoder_layers = []
+        decoder_layers = []
+        
+        for h_dim in hidden_dims:
+            encoder_layers.append(nn.Linear(input_dim, h_dim))
+            encoder_layers.append(nn.ReLU())
+            if self.dropout > 0:
+                encoder_layers.append(nn.Dropout(dropout))
+            input_dim = h_dim
+            
+        self.encoder = nn.Sequential(*encoder_layers)
+        
+        for h_dim in hidden_dims[::-1]:
+            decoder_layers.append(nn.Linear(h_dim, input_dim))
+            decoder_layers.append(nn.ReLU())
+            if self.dropout > 0:
+                decoder_layers.append(nn.Dropout(dropout))
+            input_dim = h_dim
+            
+        self.decoder = nn.Sequential(*decoder_layers)
+        
+    def _reparametrize(self, mu, logvar):
+        """
+        Reparameterization trick to sample from N(mu, var) from N(0,1).
+        """
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    
+    
+    def forward(self, x):
+        """
+        Defines the forward pass of the VAE.
+        Returns:  
+            - x (torch.Tensor): The decoded output tensor.
+            - z (torch.Tensor): The latent space tensor.
+            - mu (torch.Tensor): The mean of the latent space.
+            - logvar (torch.Tensor): The log-variance of the latent space.
+        """
+        x = self.encoder(x)
+        mu, logvar = torch.chunk(x, 2, dim=-1)
+        z = self._reparametrize(mu, logvar)
+        x = self.decoder(z)
+        return x, mu, logvar
+    
+    def loss_function(self, x_true, reconstruction, log_var, mu):
+        """Implement the loss function for the VAE."""  
+        recons_loss = F.mse_loss(reconstruction, x_true)
+        kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+        loss = recons_loss + self.beta * kld_loss
+        return {'loss': loss, 'Reconstruction_Loss': recons_loss, 'KLD': kld_loss}
+    
+    def sample_latents(self, x, num_samples = 10):
+        """Sample from the latent space."""
+        mu, logvar = torch.chunk(self.encoder(x), 2, dim=-1)
+        z = self._reparametrize(mu, logvar)
+        return z
+
+
 class SklearnWrappedMLP(BaseEstimator, ClassifierMixin):
     """
     Wrapper for MLP model to use in sklearn pipeline.
@@ -799,3 +886,5 @@ class SklearnWrappedMLP(BaseEstimator, ClassifierMixin):
     def score(self, X, y):
         predictions = self.predict(X)
         return np.mean(predictions == y)
+    
+    
