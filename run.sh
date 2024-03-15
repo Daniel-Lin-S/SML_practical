@@ -11,7 +11,7 @@ pip install --user -r requirements.txt
 base_dir="configs/sml_configs"
 
 #device
-device="mps" # cuda or cpu or mps (if using Mac with M1 or newer)
+device="cuda" # cuda or cpu or mps (if using Mac with M1 or newer)
 
 # Number of jobs to run in parallel
 n_jobs=1 # 1 or -1
