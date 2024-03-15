@@ -1,7 +1,14 @@
 # naive_bayes:
 
-# knn
+knn:
+  knn__n_neighbors: [3, 5, 7, 10, 15]
 
+lda:
+  lda__solver: ['eigen']
+  lda__shrinkage: [0.0, 0.001, 0.01, 0.1, 1.0]
+
+qda:
+  qda__reg_param: [0.0, 0.001, 0.01, 0.1, 1.0]
 # logistic_regression:
 #   logistic_regression__C: [1] # regularisation strength
 #   logistic_regression__penalty: ['l2']
