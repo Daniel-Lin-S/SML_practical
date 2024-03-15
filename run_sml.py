@@ -207,6 +207,8 @@ def main():
                 kwargs["input_dim"] = X_train.shape[1]
             else:
                 kwargs["input_dim"] = args.n_components
+                
+            kwargs['device'] = args.device
 
         logging.info(f"The parameters for model {model_name} are {kwargs}")
         logging.info(f"Running grid search for model {model_name}")
