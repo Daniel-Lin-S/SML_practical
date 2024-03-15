@@ -12,6 +12,8 @@ from sklearn.linear_model import SGDClassifier, LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.svm import SVC
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.neighbors import KNeighborsClassifier
 
 from xgboost import XGBClassifier, XGBRFClassifier
 
@@ -30,6 +32,9 @@ from src.nn_model import SklearnWrappedMLP
 
 METHOD_DICT = {
     "naive_bayes": GaussianNB,
+    "lda": LinearDiscriminantAnalysis,
+    "qda": QuadraticDiscriminantAnalysis,
+    "knn": KNeighborsClassifier,
     "l_svm": SGDClassifier,
     "logistic_regression": LogisticRegression,
     "decision_tree": DecisionTreeClassifier,
