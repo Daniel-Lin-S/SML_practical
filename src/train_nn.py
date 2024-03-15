@@ -5,15 +5,65 @@ import time
 import argparse
 import logging
 import torch
+import numpy as np
 from sklearn.metrics import accuracy_score
-from src.nn_model import MonotonicAnnealingScheme
-from src.nn_model import vae_loss_function
 
 """A training function for a simple neural network."""
 
 
 # Set up logging
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO"))
+
+class MonotonicAnnealingScheme:
+    """Implements the monotonic annealing scheme for beta-VAE."""
+    def __init__(self, start_beta, end_beta, total_steps, increasing=True, weight=1e-4):
+        self.start_beta = start_beta
+        self.end_beta = end_beta
+        self.total_steps = total_steps
+        self.increasing = increasing
+        self.weight = weight
+    
+    def get_beta(self, current_step):
+        progress = current_step / self.total_steps
+        if self.increasing:
+            beta = self.start_beta + (self.end_beta - self.start_beta) * progress * self.weight
+        else:
+            beta = self.end_beta - (self.end_beta - self.start_beta) * progress * self.weight
+        return beta
+
+
+class CyclicAnnealingScheme:
+    """Implements the cyclic annealing scheme for beta-VAE."""
+    def __init__(self, 
+                 min_beta=0.0, 
+                 max_beta=1.0, 
+                 period=50, 
+                 total_steps=1000,
+                 start_step=0):
+        """
+        Args:   
+            - min_beta (float): The minimum value of beta.
+            - max_beta (float): The maximum value of beta.
+            - period (int): The period of the cycle.
+            - total_steps (int): The total number of steps.
+            - start_step (int): The starting step.
+        """
+        self.min_beta = min_beta
+        self.max_beta = max_beta
+        self.period = period
+        self.total_steps = total_steps
+        self.start_step = start_step
+    
+    def get_beta(self, current_step):
+        if current_step < self.start_step:
+            return self.min_beta
+        cycle = np.floor(1 + (current_step - self.start_step) / (2 * self.period))
+        x = np.abs((current_step - self.start_step) / self.period - 2 * cycle + 1)
+        beta = self.min_beta + (self.max_beta - self.min_beta) * np.maximum(0, (1 - x))
+        return beta
+
+
+
 
 
 def train(model, train_loader, optimizer, loss_function, scheduler=None, device="mps"):
@@ -151,7 +201,7 @@ def run_training_loop(
 
     TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
 
-    training_vae = True if model.__class__.__name__ == "BetaVAE" else False
+    training_vae = True if model.__class__.__name__ == "BetaVAE" or model.__class__.__name__ == "ConvVAE" else False
 
     if loss_function is None and not model.__class__.__name__ == "BetaVAE":
         raise ValueError("Loss function is required for training")
@@ -239,10 +289,10 @@ def run_training_loop(
                 )
                 # print(f'Epoch: {epoch+1}, train Loss: {train_loss:.4f}, val Loss: {val_loss:.4f}, val Accuracy: {val_acc*100:.2f}%')
 
-            if val_recon_loss < best_val_loss:
-                logging.info(f"Saving model with recon loss {val_recon_loss}")
+            if val_loss < best_val_loss:
+                logging.info(f"Saving model with recon loss {val_recon_loss} and val loss {val_loss}")
                 torch.save(model.state_dict(), os.path.join(save_path, model_name))
-                best_val_loss = val_recon_loss
+                best_val_loss = val_loss
                 wait = 0
 
             else:
@@ -285,6 +335,18 @@ def run_training_loop(
     return train_losses, val_losses, val_accs
 
 
+
+def vae_loss_function(x_true, reconstruction, log_var, mu, beta):
+    """Implement the loss function for the VAE."""  
+    # print(reconstruction.shape, x_true.shape)
+    recons_loss = torch.nn.functional.mse_loss(reconstruction, x_true)
+    kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+    
+    # modify to include beta
+    
+    loss = recons_loss + beta * kld_loss * 0.001
+    return {'loss': loss, 'Reconstruction_Loss': recons_loss, 'KLD': kld_loss}
+
 def train_vae(
     model,
     train_loader,
@@ -320,17 +382,23 @@ def train_vae(
         annealing_scheme = MonotonicAnnealingScheme(
             start_beta=0.001, end_beta=1.0, total_steps=max_epochs, increasing=True
         )
+    elif annealing_scheme == "cyclic":
+        annealing_scheme = CyclicAnnealingScheme(
+            min_beta=0.0, max_beta=1.0, total_steps=max_epochs, start_step=0
+        )
     else:
         beta = 1.0
     for X, y in train_loader:
         X = X.to(device)
         y = y.to(device)
         optimizer.zero_grad()
-        output, mu, logvar = model(X)
+        
+        output = model(X)
+        
         if annealing_scheme is not None:
             beta = annealing_scheme.get_beta(current_epoch)
         
-        all_loss = vae_loss_function(X, output, logvar, mu, beta)
+        all_loss = vae_loss_function(X, output, model.logvar, model.mu, beta)
         
         loss = all_loss["loss"]
         reconstruction_loss = all_loss["Reconstruction_Loss"]
@@ -377,7 +445,11 @@ def validate_vae(
 
     if annealing_scheme == "monotonic":
         annealing_scheme = MonotonicAnnealingScheme(
-            start_beta=0.001, end_beta=1.0, total_steps=max_epochs, increasing=True
+            start_beta=0.0, end_beta=1.0, total_steps=max_epochs, increasing=True
+        )
+    elif annealing_scheme == "cyclic":
+        annealing_scheme = CyclicAnnealingScheme(
+            min_beta=0.0, max_beta=1.0, total_steps=max_epochs, start_step=0
         )
     else:
         beta = 1.0
@@ -386,12 +458,12 @@ def validate_vae(
         for X, y in val_loader:
             X = X.to(device)
             y = y.to(device)
-            output, mu, logvar = model(X)
+            output = model(X)
 
             if annealing_scheme is not None:
                 beta = annealing_scheme.get_beta(current_epoch)
 
-            all_loss = vae_loss_function(X, output, logvar, mu, beta)
+            all_loss = vae_loss_function(X, output, model.logvar, model.mu, beta)
             loss = all_loss["loss"]
             reconstruction_loss = all_loss["Reconstruction_Loss"]
             KLD = all_loss["KLD"]
