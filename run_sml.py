@@ -125,7 +125,7 @@ def main():
     parser.add_argument(
         "--n_jobs",
         type=int,
-        default=1,
+        default=-1,
         help="The number of jobs to run in parallel, default is all cores",
     )
 
