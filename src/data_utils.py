@@ -411,7 +411,7 @@ class CustomDimReduction(BaseEstimator, TransformerMixin):
         elif self.method is None:
             self.reducer = None
         else:
-            raise ValueError("Invalid reduction method. Use 'pca' or 'lda' or 'mrmr'.")
+            raise ValueError(f"Invalid reduction method {self.method}. Use 'pca' or 'lda' or 'mrmr'.")
 
         self.reducer.fit(X, y)
         return self
