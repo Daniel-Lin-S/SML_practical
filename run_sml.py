@@ -11,8 +11,8 @@ from packaging.version import Version
 import sklearn
 from sklearn.metrics import classification_report
 
-from src.data_utils import MusicDataset
 from src.sml_model import *
+from src.data_utils import MusicDataset
 
 # paths to the data
 PATH_to_X = "data/X_train.csv"
