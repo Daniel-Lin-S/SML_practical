@@ -2,6 +2,7 @@
 src/__pycache__/
 *.pyc
 logs/
+figures/
 models/
 *.DS_Store
 notebooks/
