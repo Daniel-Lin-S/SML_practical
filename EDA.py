@@ -4,6 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import shapiro, kstest
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.manifold import TSNE
+from sklearn.decomposition import PCA
+import mrmr
+from mrmr import mrmr_classif
 
 ### data loading ###
 X = pd.read_csv('data/X_train.csv', index_col = 0, header=[0, 1, 2]) # inputs 
@@ -59,7 +66,7 @@ ax3.set_xticklabels(ax3.get_xticklabels(), rotation=45)
 ax3.set_yticklabels(ax3.get_yticklabels(), rotation=45)
 
 plt.tight_layout()
-plt.show()
+plt.savefig('figures/correlation_chroma_chroma.png', dpi=300)
 
 # Calculate the correlation matrix of all features
 correlation_matrix = X.corr()
@@ -70,7 +77,7 @@ sns.histplot(correlation_matrix.values.flatten(), bins=50, kde=True)
 plt.title('Distribution of Correlation Coefficients')
 plt.xlabel('Correlation Coefficient')
 plt.ylabel('Frequency')
-plt.show()
+plt.savefig('figures/correlation_hist.png', dpi=300)
 
 ### test normality of each class(genre) ###
 # Iterate over unique class labels
