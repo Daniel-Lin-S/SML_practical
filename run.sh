@@ -11,6 +11,11 @@ pip install --user -r requirements.txt
 base_dir="configs/sml_configs"
 
 #device
+device="mps" # cuda or cpu or mps (if using Mac with M1 or newer)
+
+# Number of jobs to run in parallel
+n_jobs=1 # 1 or -1
+
 
 # Ensure the base directory exists
 mkdir -p "$base_dir"
@@ -48,11 +53,11 @@ for reduce_method in lda pca igr mrmr none; do # lda pca none mrmr igr
         
         # Run the script with the current set of parameters
         if [ "$reduce_method" = "none" ]; then
-            echo "Running: python run_sml.py --reduce_method $reduce_method --output_dir $output_dir"
-            python run_sml.py --reduce_method "$reduce_method" --output_dir "$output_dir"
+            echo "Running: python run_sml.py --reduce_method $reduce_method --output_dir $output_dir" --device $device --n_jobs $n_jobs
+            python run_sml.py --reduce_method "$reduce_method" --output_dir "$output_dir" --device $device --n_jobs $n_jobs
         else
-            echo "Running: python run_sml.py --reduce_method $reduce_method --n_components $n --output_dir $output_dir"
-            python run_sml.py --reduce_method "$reduce_method" --n_components "$n" --output_dir "$output_dir"
+            echo "Running: python run_sml.py --reduce_method $reduce_method --n_components $n --output_dir $output_dir" --device $device --n_jobs $n_jobs
+            python run_sml.py --reduce_method "$reduce_method" --n_components "$n" --output_dir "$output_dir" --device $device --n_jobs $n_jobs
         fi
     done
 done
