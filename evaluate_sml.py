@@ -40,9 +40,6 @@ def get_top_dirs():
     reduction_methods = ["mrmr", 
                          "igr", 
                          "pca"]
-    # reduction_methods = [
-    #     "igr"
-    # ]
 
     num_components = [7, 50, 100, 250]
 
@@ -53,7 +50,7 @@ def get_top_dirs():
     top_dirs.append(os.path.join(base_dir, "lda_7"))
 
     # add no reduction
-    top_dirs.append(os.path.join(base_dir, "none"))
+    # top_dirs.append(os.path.join(base_dir, "none"))
 
     for method in reduction_methods:
         for n in num_components:
