@@ -12,3 +12,9 @@ output.*
 best_params*
 *.npz
 *.txt
+*.pt
+*.json
+*.html
+*.pkl
+*.npz
+*.pth
