@@ -2,7 +2,7 @@
 
 # knn:
 #   knn__n_neighbors: [3, 5, 7, 10, 15]
-
+#   knn__metric: ['l2', 'l1', 'cosine']
 # lda:
 #   lda__solver: ['eigen']
 #   lda__shrinkage: [0.0, 0.001, 0.01, 0.1, 1.0]
@@ -15,10 +15,10 @@
 #   logistic_regression__solver: ['lbfgs']  # solver for optimisation
 
 
-mlp:
-  mlp__module__hidden_dims: [[384, 64], [384, 32], [256, 64], [256, 32], [64, 64], [64, 32]]
-  mlp__module__dropout: [0.2, 0.5]
-  # mlp__activation: ['relu']
+# mlp:
+#   mlp__module__hidden_dims: [[384, 64], [384, 32], [256, 64], [256, 32], [64, 64], [64, 32]]
+#   mlp__module__dropout: [0.2, 0.5]
+#   # mlp__activation: ['relu']
 
 # xgboost_rf:
 #   # learning_rate: [0.1]

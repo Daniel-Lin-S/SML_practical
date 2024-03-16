@@ -21,11 +21,10 @@ n_jobs=-1 # 1 or -1
 mkdir -p "$base_dir"
 
 # Loop through reduce_method options
-for reduce_method in mrmr igr; do # lda pca none mrmr igr
+for reduce_method in lda pca mrmr igr none; do # lda pca none mrmr igr
     # Define n_components array based on the reduce_method
     if [ "$reduce_method" = "pca" ]; then
         declare -a n_components=(7 50 100 250)
-        # declare -a n_components=(5)
     elif [ "$reduce_method" = "lda" ]; then
         declare -a n_components=(7)
     elif [ "$reduce_method" = "igr" ]; then

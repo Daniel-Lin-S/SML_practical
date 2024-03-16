@@ -1,5 +1,5 @@
 """
-Run the entire pipeline.
+Run the entire pipeline for grid search.
 """
 
 import os
@@ -42,13 +42,11 @@ TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
 
 if Version(sklearn.__version__) < Version("1.2"):
     KWARGS_FOR_GRID_SEARCH = {
-        "l_svm": {"max_iter": 5000},
         "xgboost_rf": {"random_state": 42},
         "adaboost": {"base_estimator": DecisionTreeClassifier()},
     }
 else:
     KWARGS_FOR_GRID_SEARCH = {
-        "l_svm": {"max_iter": 5000},
         "xgboost_rf": {"random_state": 42},
         "adaboost": {"estimator": DecisionTreeClassifier()},
     }
@@ -163,7 +161,7 @@ def main():
         path_to_y=PATH_to_y,
         test_size=args.test_size,
         random_state=args.random_state,
-        shuffle=args.shuffle,
+        shuffle=False,
         features_to_drop=features_to_drop,
         swap_axes=False,
     )
@@ -187,10 +185,22 @@ def main():
         scaler=None,
         reduction_method=None,
     )
-
-    print(
-        f"Sanity check of shapes: {X_train.shape}, {X_test.shape}, {y_train.shape}, {y_test.shape}"
-    )
+    
+    # save the train and test data for later evaluation
+    if not os.path.exists("cv_data"):
+        os.makedirs("cv_data")
+        
+    if isinstance(X_train, pd.DataFrame):
+        X_train.to_csv("cv_data/X_train.csv", index=False)
+        X_test.to_csv("cv_data/X_test.csv", index=False)
+        
+    else:
+        np.savetxt("cv_data/X_train.csv", X_train, delimiter=",")
+        np.savetxt("cv_data/X_test.csv", X_test, delimiter=",")
+        
+    # since y has been passed through label encoder, it is np.ndarray
+    np.savetxt("cv_data/y_train.csv", y_train, delimiter=",")
+    np.savetxt("cv_data/y_test.csv", y_test, delimiter=",")
 
     best_params = {}
 
@@ -244,31 +254,17 @@ def main():
             else:
                 kwargs["module__input_dim"] = args.n_components
 
-                # custom_reducer = CustomDimReduction(
-                #     method=reduction_method,
-                #     n_components=args.n_components,
-                #     feature_columns=feature_columns,
-                # )
-                
-                # X_train_reduced = custom_reducer.fit_transform(X_train, y_train)
-                # X_test_reduced = custom_reducer.transform(X_test)
-                
-                # validation_set = MusicData(X_test_reduced, y_test)
-                
-                # kwargs["train_split"] = predefined_split(validation_set)
-
             kwargs["module"] = MLP
             kwargs["max_epochs"] = 500
             kwargs["verbose"] = 0
             kwargs["criterion"] = torch.nn.CrossEntropyLoss
-            # kwargs["callbacks"] = [
-            #     EarlyStopping(patience=20),
-            #     Checkpoint(dirname="mlp_cv"),
-            # ]
             kwargs["optimizer"] = torch.optim.AdamW
-            kwargs["device"] = "cpu"
-
-            # set to numpy array if not yet
+            kwargs["device"] = args.device
+            
+        if isinstance(X_train, pd.DataFrame):
+            feature_columns = X_train.columns
+        else:
+            feature_columns = None
 
         logging.info(f"The parameters for model {model_name} are {kwargs}")
         logging.info(f"Running grid search for model {model_name}")

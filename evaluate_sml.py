@@ -34,12 +34,11 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
+
 def get_top_dirs():
     base_dir = "configs/sml_configs"
 
-    reduction_methods = ["mrmr", 
-                         "igr", 
-                         "pca"]
+    reduction_methods = ["mrmr", "igr", "pca"]
 
     num_components = [7, 50, 100, 250]
 
@@ -58,10 +57,19 @@ def get_top_dirs():
 
     return top_dirs
 
+
 def main():
-    
+
     top_dirs = get_top_dirs()
-        
+    parser = argparse.ArgumentParser(description="Run the entire pipeline.")
+    parser.add_argument(
+        "--use_cv_score",
+        type=bool,
+        default=True,
+        help="Whether to use cross validation score, if not then only report the test score using the remaining data",
+    )
+    use_cv_score = parser.parse_args().use_cv_score
+
     # deprecated for mlp
     methods_list = [
         # "mlp",
@@ -92,10 +100,6 @@ def main():
             X_all = pd.read_csv(PATH_to_X, index_col=0, header=[0, 1, 2])
             y_all = pd.read_csv(PATH_to_y, index_col=0)
 
-            # split the data
-            # X_train, X_test, y_train, y_test = train_test_split(
-            #     X_all, y_all, test_size=0.2, random_state=42
-            # )
             X_train = X_all
             le = LabelEncoder()
             y_train = le.fit_transform(y_all.values.ravel())
@@ -112,32 +116,20 @@ def main():
 
             with open(path, "r") as file:
                 best_params = yaml.safe_load(file)
-            
+
             # load the best parameters
             # initialize the model
             try:
-                new_best_params = {}    
+                new_best_params = {}
                 for key in best_params[method].keys():
                     if "__" in key:
                         new_key = key.split("__")[-1]
                         new_best_params[new_key] = best_params[method][key]
-                
-                # change the keys from mlp__layer to layer                
-                if method == "mlp" and red_method is None:
-                    new_best_params['device'] = "cpu"
-                    new_best_params['input_dim'] = X_train.shape[1]
-                    
-                elif method == "mlp" and red_method is not None:
-                    new_best_params['device'] = "cpu"
-                    new_best_params['input_dim'] = n_components
-                    
+
                 _model = METHOD_DICT[method](**new_best_params)
             except AttributeError:
                 logging.info(f"No keys found, using default parameters for {method}...")
                 _model = METHOD_DICT[method]()
-
-            # if _red_method == "mrmr":
-            # assert isinstance(X_train, pd.DataFrame), "X_train should be a pandas DataFrame when using mrmr"
 
             pipes = []
             pipes.append(("scaler", StandardScaler()))
@@ -159,78 +151,75 @@ def main():
             # construct the pipeline
             model = pipeline.Pipeline(pipes)
 
-            if method != "mlp":
+            if use_cv_score:
                 scores = cross_val_score(
                     model, X_train, y_train, cv=5, scoring="accuracy", n_jobs=-1
                 )
-            else:
-                if isinstance(X_train, pd.DataFrame):
-                    X_train = X_train.to_numpy()
-                    
-                if isinstance(y_train, pd.DataFrame):
-                    y_train = y_train.to_numpy().ravel()
-                    
-                scores = cross_val_score(
-                    model, X_train, y_train, cv=5, scoring="accuracy", n_jobs=1
+                mean_score = np.mean(scores)
+                std_score = np.std(scores)
+                confidence_interval = (
+                    mean_score - 2 * std_score,
+                    mean_score + 2 * std_score,
                 )
 
             # write the mean of scores and confidence interval
             # as well as classification report to evaluation/{_red_method}/{method}.txt
-            red_method_name = f"{red_method}_{n_components}" if red_method is not None else "none"
+            red_method_name = (
+                f"{red_method}_{n_components}" if red_method is not None else "none"
+            )
             output_dir = os.path.join("evaluation", red_method_name)
             os.makedirs(output_dir, exist_ok=True)
 
             output_file = os.path.join(output_dir, f"{method}.txt")
-            mean_score = np.mean(scores)
-            std_score = np.std(scores)
-            confidence_interval = (
-                mean_score - 2 * std_score,
-                mean_score + 2 * std_score,
-            )
+            
 
             # fit for classification report separately
+            # the split is not random, so we are using the same test set as in cv
             music_data = MusicDataset(
                 path_to_X="data/X_train.csv",
                 path_to_y="data/y_train.csv",
                 test_size=0.2,
                 swap_axes=False,
                 features_to_drop=None,
+                shuffle=False,
             )
 
             X_train_c, X_test_c, y_train_c, y_test_c = music_data.get_data(
-                scaler="standard", 
+                scaler="standard",
                 reduction_method=red_method,
                 n_components=n_components,
             )
-            
+
             # torch wrapper requires numpy arrays
             if method == "mlp":
                 if isinstance(X_train_c, pd.DataFrame):
                     X_train_c = X_train_c.to_numpy()
                     X_test_c = X_test_c.to_numpy()
-                    
+
                 if isinstance(y_train_c, pd.DataFrame):
                     y_train_c = y_train_c.to_numpy().ravel()
                     y_test_c = y_test_c.to_numpy().ravel()
-                    
-                new_best_params['device'] = "cpu"
+
+                new_best_params["device"] = "cpu"
                 if red_method is None:
-                    new_best_params['input_dim'] = X_train_c.shape[1]
+                    new_best_params["input_dim"] = X_train_c.shape[1]
                 else:
-                    new_best_params['input_dim'] = n_components
+                    new_best_params["input_dim"] = n_components
 
             # re-initialize the model
             _model_c = METHOD_DICT[method](**new_best_params)
-            
-            logging.info(f"Fitting model {method} with best parameters {new_best_params}...")
+
+            logging.info(
+                f"Fitting model {method} with best parameters {new_best_params}..."
+            )
             start = timeit.default_timer()
             _model_c.fit(X_train_c, y_train_c)
             end = timeit.default_timer()
 
             time_elapsed = end - start
-            
+
             logging.info(f"Model Fitted. Time elapsed: {time_elapsed}")
-            
+
             # classification report
             classification_report_train = classification_report(
                 y_train_c, _model_c.predict(X_train_c), digits=4
@@ -241,8 +230,12 @@ def main():
             )
 
             # confusion matrix
-            confusion_matrix_train = confusion_matrix(y_train_c, _model_c.predict(X_train_c))
-            confusion_matrix_test = confusion_matrix(y_test_c, _model_c.predict(X_test_c))
+            confusion_matrix_train = confusion_matrix(
+                y_train_c, _model_c.predict(X_train_c)
+            )
+            confusion_matrix_test = confusion_matrix(
+                y_test_c, _model_c.predict(X_test_c)
+            )
 
             with open(output_file, "w") as f:
                 f.write(f"Mean Score: {mean_score}\n")

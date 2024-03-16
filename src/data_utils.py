@@ -37,7 +37,7 @@ class MusicDataset:
         path_to_y="data/y_train.csv",
         test_size=0.2,
         random_state=42,
-        shuffle=False,
+        shuffle=True,
         swap_axes=False,
         features_to_drop=None,
     ):
