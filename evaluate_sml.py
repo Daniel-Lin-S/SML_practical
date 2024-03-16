@@ -34,14 +34,17 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 
-
-def main():
-
+def get_top_dirs():
     base_dir = "configs/sml_configs"
 
-    reduction_methods = ["mrmr", "igr"]
+    reduction_methods = ["mrmr", 
+                         "igr", 
+                         "pca"]
+    # reduction_methods = [
+    #     "igr"
+    # ]
 
-    num_components = [7, 50, 100, 250, 350]
+    num_components = [7, 50, 100, 250]
 
     # top directories to save the output
     top_dirs = []
@@ -56,6 +59,12 @@ def main():
         for n in num_components:
             top_dirs.append(os.path.join(base_dir, f"{method}_{n}"))
 
+    return top_dirs
+
+def main():
+    
+    top_dirs = get_top_dirs()
+        
     methods_list = [
         "mlp",
         "c_svm",
@@ -63,7 +72,7 @@ def main():
         "knn",
         "lda",
         "qda",
-        "xgboost_rf",
+        # "xgboost_rf",
     ]
 
     # intialize the models with best hyperparameters and evaluate using crossval
@@ -105,21 +114,29 @@ def main():
 
             with open(path, "r") as file:
                 best_params = yaml.safe_load(file)
-
-            # change the keys from mlp__layer to layer
-            for key in best_params[method].keys():
-                if "__" in key:
-                    new_key = key.split("__")[-1]
-                    best_params[method][new_key] = best_params[method].pop(key)
-
-            if method == "mlp":
-                if red_method is None:
-                    best_params[method]["input_dim"] = X_train.shape[1]
-                else:
-                    best_params[method]["input_dim"] = n_components
-
+            
+            # load the best parameters
             # initialize the model
-            _model = METHOD_DICT[method](**best_params[method])
+            try:
+                new_best_params = {}    
+                for key in best_params[method].keys():
+                    if "__" in key:
+                        new_key = key.split("__")[-1]
+                        new_best_params[new_key] = best_params[method][key]
+                
+                # change the keys from mlp__layer to layer                
+                if method == "mlp" and red_method is None:
+                    new_best_params['device'] = "cpu"
+                    new_best_params['input_dim'] = X_train.shape[1]
+                    
+                elif method == "mlp" and red_method is not None:
+                    new_best_params['device'] = "cpu"
+                    new_best_params['input_dim'] = n_components
+                    
+                _model = METHOD_DICT[method](**new_best_params)
+            except AttributeError:
+                logging.info(f"No keys found, using default parameters for {method}...")
+                _model = METHOD_DICT[method]()
 
             # if _red_method == "mrmr":
             # assert isinstance(X_train, pd.DataFrame), "X_train should be a pandas DataFrame when using mrmr"
@@ -149,8 +166,6 @@ def main():
                     model, X_train, y_train, cv=5, scoring="accuracy", n_jobs=-1
                 )
             else:
-                # print(type(X_train))
-                # print(type(y_train))
                 if isinstance(X_train, pd.DataFrame):
                     X_train = X_train.to_numpy()
                     
@@ -163,7 +178,7 @@ def main():
 
             # write the mean of scores and confidence interval
             # as well as classification report to evaluation/{_red_method}/{method}.txt
-            red_method_name = red_method if red_method is not None else "none"
+            red_method_name = f"{red_method}_{n_components}" if red_method is not None else "none"
             output_dir = os.path.join("evaluation", red_method_name)
             os.makedirs(output_dir, exist_ok=True)
 
@@ -190,6 +205,7 @@ def main():
                 n_components=n_components,
             )
             
+            # torch wrapper requires numpy arrays
             if method == "mlp":
                 if isinstance(X_train_c, pd.DataFrame):
                     X_train_c = X_train_c.to_numpy()
@@ -198,27 +214,37 @@ def main():
                 if isinstance(y_train_c, pd.DataFrame):
                     y_train_c = y_train_c.to_numpy().ravel()
                     y_test_c = y_test_c.to_numpy().ravel()
+                    
+                new_best_params['device'] = "cpu"
+                if red_method is None:
+                    new_best_params['input_dim'] = X_train_c.shape[1]
+                else:
+                    new_best_params['input_dim'] = n_components
 
-            logging.info(f"Fitting model {method}...")
+            # re-initialize the model
+            _model_c = METHOD_DICT[method](**new_best_params)
+            
+            logging.info(f"Fitting model {method} with best parameters {new_best_params}...")
             start = timeit.default_timer()
-            _model.fit(X_train_c, y_train_c)
+            _model_c.fit(X_train_c, y_train_c)
             end = timeit.default_timer()
 
             time_elapsed = end - start
             
             logging.info(f"Model Fitted. Time elapsed: {time_elapsed}")
             
-            # _model is the one without the reduction method and scaling
+            # classification report
             classification_report_train = classification_report(
-                y_train_c, _model.predict(X_train_c), digits=4
+                y_train_c, _model_c.predict(X_train_c), digits=4
             )
 
             classification_report_test = classification_report(
-                y_test_c, _model.predict(X_test_c), digits=4
+                y_test_c, _model_c.predict(X_test_c), digits=4
             )
 
-            confusion_matrix_train = confusion_matrix(y_train_c, _model.predict(X_train_c))
-            confusion_matrix_test = confusion_matrix(y_test_c, _model.predict(X_test_c))
+            # confusion matrix
+            confusion_matrix_train = confusion_matrix(y_train_c, _model_c.predict(X_train_c))
+            confusion_matrix_test = confusion_matrix(y_test_c, _model_c.predict(X_test_c))
 
             with open(output_file, "w") as f:
                 f.write(f"Mean Score: {mean_score}\n")
