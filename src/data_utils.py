@@ -157,7 +157,7 @@ class MusicDataset:
             - X_test: The test input data
             - y_train: The training target data
             - y_test: The test target data
-            - method: The dimensionality reduction method (pca, lda, mrmr), can be None
+            - method: The dimensionality reduction method (pca, lda, mrmr, igr), can be None
             - n_components: The number of components to keep
 
         Returns:
@@ -182,6 +182,13 @@ class MusicDataset:
             reducer = LinearDiscriminantAnalysis(n_components=n_components)
             reducer.fit(X_train, y_train)
 
+            X_train_reduced = reducer.transform(X_train)
+            X_test_reduced = reducer.transform(X_test)
+            
+        elif method == "igr":
+            reducer = SelectKBest(mutual_info_classif, k=n_components)
+            reducer.fit(X_train, y_train)
+            
             X_train_reduced = reducer.transform(X_train)
             X_test_reduced = reducer.transform(X_test)
 
