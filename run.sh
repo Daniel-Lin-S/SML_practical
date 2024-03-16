@@ -14,14 +14,14 @@ base_dir="configs/sml_configs"
 device="mps" # cuda or cpu or mps (if using Mac with M1 or newer)
 
 # Number of jobs to run in parallel
-n_jobs=1 # 1 or -1
+n_jobs=-1 # 1 or -1
 
 
 # Ensure the base directory exists
 mkdir -p "$base_dir"
 
 # Loop through reduce_method options
-for reduce_method in lda igr mrmr none; do # lda pca none mrmr igr
+for reduce_method in pca; do # lda pca none mrmr igr
     # Define n_components array based on the reduce_method
     if [ "$reduce_method" = "pca" ]; then
         declare -a n_components=(7 50 100 250)
