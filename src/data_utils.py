@@ -288,7 +288,7 @@ class MusicDataset:
         else:
             print(f"Using {k_fold_splits}-fold cross-validation.")
             if use_all_data:
-                X_to_use = self.X
+                X_to_use = self.X_raw
                 y_to_use = self.y
             else:
                 X_to_use = self.X_train
@@ -396,10 +396,11 @@ class CustomDimReduction(BaseEstimator, TransformerMixin):
     A class for dimensionality reduction using PCA or LDA or or IGR or mRMR.
     """
 
-    def __init__(self, method, n_components, feature_columns=None):
+    def __init__(self, method, n_components, feature_columns=None, dtype=np.float32):
         self.method = method
         self.n_components = n_components
         self.feature_columns = feature_columns
+        self.dtype = dtype
 
         if feature_columns is None and method == "mrmr":
             raise ValueError("feature_columns must be provided for mRMR method")
@@ -427,4 +428,7 @@ class CustomDimReduction(BaseEstimator, TransformerMixin):
         if self.method is None:
             return X
         else:
-            return self.reducer.transform(X)
+            if self.dtype is not None:
+                return self.reducer.transform(X).astype(self.dtype)
+            else:
+                return self.reducer.transform(X)

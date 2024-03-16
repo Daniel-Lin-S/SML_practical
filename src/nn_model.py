@@ -3,6 +3,7 @@
 import enum
 import math
 import torch
+import skorch
 import numpy as np
 
 
@@ -99,14 +100,14 @@ class MLP(nn.Module):
     def __init__(
         self,
         input_dim,
-        output_dim,
-        n_groups,
-        n_features_per_group,
-        n_embed_dim,
+        output_dim=8,
+        n_groups=11,
+        n_features_per_group=[84, 84, 84, 140, 7, 7, 7, 49, 7, 42, 7],
+        n_embed_dim=8,
         hidden_dims=[32, 64, 128],
         dropout=0.0,
-        activation="tanh",
-        use_patch_embedding=True,
+        activation="relu",
+        use_patch_embedding=False,
     ):
         """
         Initializes the MLP model.
@@ -1001,6 +1002,5 @@ class SklearnWrappedMLP(BaseEstimator, ClassifierMixin):
     def score(self, X, y):
         predictions = self.predict(X)
         return np.mean(predictions == y)
-
     
     

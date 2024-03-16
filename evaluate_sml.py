@@ -65,8 +65,9 @@ def main():
     
     top_dirs = get_top_dirs()
         
+    # deprecated for mlp
     methods_list = [
-        "mlp",
+        # "mlp",
         "c_svm",
         "naive_bayes",
         "knn",

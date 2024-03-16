@@ -8,11 +8,18 @@ import logging
 import argparse
 from packaging.version import Version
 
+import torch
+
 import sklearn
 from sklearn.metrics import classification_report
 
+from skorch.helper import predefined_split
+from skorch.callbacks import EarlyStopping, Checkpoint
+
 from src.sml_model import *
-from src.data_utils import MusicDataset
+from src.nn_model import MLP
+from src.dataloader import MusicData
+from src.data_utils import MusicDataset, CustomDimReduction
 
 # paths to the data
 PATH_to_X = "data/X_train.csv"
@@ -135,7 +142,7 @@ def main():
         default=False,
         help="Whether or not to use the feature drop for first two features",
     )
-    
+
     parser.add_argument(
         "--device",
         type=str,
@@ -200,15 +207,68 @@ def main():
             kwargs = KWARGS_FOR_GRID_SEARCH[model_name]
         else:
             kwargs = {}
-        
+
         # torch wrapper requires the input dimension
         if model_name == "mlp":
-            if reduction_method is None:
-                kwargs["input_dim"] = X_train.shape[1]
+            # set to numpy float 32
+            mlp_dataset = MusicDataset(
+                path_to_X=PATH_to_X,
+                path_to_y=PATH_to_y,
+                test_size=0.2,
+                random_state=args.random_state,
+                shuffle=args.shuffle,
+                features_to_drop=features_to_drop,
+                swap_axes=False,
+            )
+
+            X_train, X_test, y_train, y_test = mlp_dataset.get_data(
+                scaler=None,
+                reduction_method=None,
+            )
+
+            if isinstance(X_train, pd.DataFrame):
+                feature_columns = X_train.columns
             else:
-                kwargs["input_dim"] = args.n_components
+                raise ValueError("X_train must be a pandas DataFrame")
+
+            if not isinstance(X_train, np.ndarray):
+                X_train = X_train.to_numpy().astype(np.float32)
+                X_test = X_test.to_numpy().astype(np.float32)
+
+            if reduction_method is None:
+                kwargs["module__input_dim"] = X_train.shape[1]
+
+                # set the torch dataset for validation
+                validation_set = MusicData(X_test, y_test)
+                kwargs["train_split"] = predefined_split(validation_set)
+            else:
+                kwargs["module__input_dim"] = args.n_components
+
+                # custom_reducer = CustomDimReduction(
+                #     method=reduction_method,
+                #     n_components=args.n_components,
+                #     feature_columns=feature_columns,
+                # )
                 
-            kwargs['device'] = args.device
+                # X_train_reduced = custom_reducer.fit_transform(X_train, y_train)
+                # X_test_reduced = custom_reducer.transform(X_test)
+                
+                # validation_set = MusicData(X_test_reduced, y_test)
+                
+                # kwargs["train_split"] = predefined_split(validation_set)
+
+            kwargs["module"] = MLP
+            kwargs["max_epochs"] = 500
+            kwargs["verbose"] = 0
+            kwargs["criterion"] = torch.nn.CrossEntropyLoss
+            # kwargs["callbacks"] = [
+            #     EarlyStopping(patience=20),
+            #     Checkpoint(dirname="mlp_cv"),
+            # ]
+            kwargs["optimizer"] = torch.optim.AdamW
+            kwargs["device"] = "cpu"
+
+            # set to numpy array if not yet
 
         logging.info(f"The parameters for model {model_name} are {kwargs}")
         logging.info(f"Running grid search for model {model_name}")
@@ -223,10 +283,11 @@ def main():
             scoring=args.scoring,
             n_jobs=args.n_jobs,
             ignore_warnings=True,
-            verbose=3,
+            sk_verbose=3,
             scaling_method=scaling_method,
             reduction_method=reduction_method,
             n_components=args.n_components,
+            feature_columns=feature_columns,
             **kwargs,
         )
 
@@ -259,10 +320,10 @@ def main():
             # get train accuracy
             file.write(f"Train report \n")
             file.write(report_train)
-            
+
             # also write the time
             file.write("\n")
-            file.write(f"="*50)
+            file.write(f"=" * 50)
             file.write(f"\nTime taken: {time_elapsed} seconds\n")
 
         logging.info(f"Report for model {model_name} has been written")

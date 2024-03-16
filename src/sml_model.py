@@ -1,4 +1,5 @@
 """Contains a collection of Statistical Machine Learning Models."""
+
 import time
 import timeit
 import yaml
@@ -7,12 +8,17 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from skorch import NeuralNetClassifier
+
 from sklearn.naive_bayes import GaussianNB
 from sklearn.linear_model import SGDClassifier, LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.svm import SVC
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.discriminant_analysis import (
+    LinearDiscriminantAnalysis,
+    QuadraticDiscriminantAnalysis,
+)
 from sklearn.neighbors import KNeighborsClassifier
 
 from xgboost import XGBClassifier, XGBRFClassifier
@@ -27,7 +33,7 @@ from sklearn.exceptions import ConvergenceWarning
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from src.data_utils import CustomDimReduction
-from src.nn_model import SklearnWrappedMLP
+from src.nn_model import MLP
 
 
 METHOD_DICT = {
@@ -43,7 +49,7 @@ METHOD_DICT = {
     "c_svm": SVC,
     "xgboost": XGBClassifier,
     "xgboost_rf": XGBRFClassifier,
-    "mlp": SklearnWrappedMLP,
+    "mlp": NeuralNetClassifier,
 }
 
 
@@ -70,10 +76,11 @@ def grid_search_cv(
     scoring="accuracy",
     n_jobs=-1,
     ignore_warnings=True,
-    verbose=0,
+    sk_verbose=0,
     scaling_method="standard",
     reduction_method="pca",
     n_components=2,
+    feature_columns=None,
     **kwargs,
 ):
     """
@@ -92,10 +99,11 @@ def grid_search_cv(
         - scoring: The scoring metric to use
         - n_jobs: The number of jobs to run in parallel
         - ignore_warnings: Whether or not to ignore warnings
-        - verbose: The verbosity level
+        - sk_verbose: The verbosity level
         - scaling_method: The method to use for scaling the data
         - reduction_method: The method to use for dimensionality reduction
         - n_components: The number of components to reduce to
+        - feature_columns: The columns to use for the model
         - kwargs: Additional keyword arguments for the model
 
     Returns:
@@ -105,9 +113,11 @@ def grid_search_cv(
 
     # initialize the model
     _model = METHOD_DICT[model_name](**kwargs)
-    
-    if reduction_method == "mrmr":
-        assert isinstance(X_train, pd.DataFrame), "X_train should be a pandas DataFrame when using mrmr"
+
+    # if reduction_method == "mrmr":
+    #     assert isinstance(
+    #         X_train, pd.DataFrame
+    #     ), "X_train should be a pandas DataFrame when using mrmr"
 
     pipes = []
     if scaling_method is not None:
@@ -122,14 +132,16 @@ def grid_search_cv(
         pipes.append(
             (
                 "reducer",
-                CustomDimReduction(method=reduction_method, 
-                                   n_components=n_components,
-                                   feature_columns=X_train.columns),
+                CustomDimReduction(
+                    method=reduction_method,
+                    n_components=n_components,
+                    feature_columns=feature_columns,
+                ),
             )
         )
-    
+
     pipes.append((model_name, _model))
-    
+
     # construct the pipeline
     model = pipeline.Pipeline(pipes)
 
@@ -143,20 +155,20 @@ def grid_search_cv(
 
     # load the parameters
     grid_search = GridSearchCV(
-        model, 
-        param_grid, 
-        cv=cv, 
-        scoring=scoring, 
-        n_jobs=n_jobs, 
-        verbose=verbose, 
-        error_score='raise'
+        model,
+        param_grid,
+        cv=cv,
+        scoring=scoring,
+        n_jobs=n_jobs,
+        verbose=sk_verbose,
+        error_score="raise",
     )
 
     # fit the model
     begin = timeit.default_timer()
     grid_search.fit(X_train, y_train)
     end = timeit.default_timer()
-    
+
     time_elapsed = end - begin
 
     return grid_search, time_elapsed

@@ -15,21 +15,21 @@
 #   logistic_regression__solver: ['lbfgs']  # solver for optimisation
 
 
-# mlp:
-#   mlp__hidden_dims: [[384, 64], [256, 64], [64, 64]]
-#   mlp__dropout: [0.2, 0.5]
-#   mlp__activation: ['relu']
+mlp:
+  mlp__module__hidden_dims: [[384, 64], [384, 32], [256, 64], [256, 32], [64, 64], [64, 32]]
+  mlp__module__dropout: [0.2, 0.5]
+  # mlp__activation: ['relu']
 
 # xgboost_rf:
 #   # learning_rate: [0.1]
 #   # subsample: [0.5]
 #   # colsample_bynode: [0.2]
-#   xgboost_rf__learning_rate: [0.05] # step size shrinkage used in each boosting iteration
+#   xgboost_rf__learning_rate: [0.01] # step size shrinkage used in each boosting iteration
 #   xgboost_rf__n_estimators: [100, 200] # number of trees
-#   xgboost_rf__max_depth: [5] # max tree depth
-#   xgboost_rf__subsample: [0.3, 0.5, 0.9] # fraction of samples used for fitting each tree
-#   xgboost_rf__colsample_bynode: [0.5, 0.6, 0.9] # fraction of features used for fitting each tree
-#   # xgboost_rf__gamma: [0, 0.1, 0.2] # Minimum loss reduction required to make a further partition on a leaf node of the tree.
+#   xgboost_rf__max_depth: [3, 5] # max tree depth
+#   xgboost_rf__subsample: [0.1, 0.3, 0.5] # fraction of samples used for fitting each tree
+#   xgboost_rf__colsample_bynode: [0.1, 0.3, 0.5] # fraction of features used for fitting each tree
+  # xgboost_rf__gamma: [0, 0.1, 0.2] # Minimum loss reduction required to make a further partition on a leaf node of the tree.
 
 # random_forest:
 #   random_forest__n_estimators: [100, 200, 300] # number of trees in the forest
@@ -41,14 +41,14 @@
 
 
 
-c_svm:
-  # C: [0.001, 0.01, 0.1, 1] # regularisation strength
-  c_svm__C: [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0]
-  # kernel: ['linear', 'poly', 'rbf', 'sigmoid'] # kernel function
-  c_svm__kernel: ['rbf']
-  # degree: [2, 3, 4, 5, 6] # degree of the polynomial kernel function
-  # c_svm__degree: [3]
-  c_svm__gamma: ['scale'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
+# c_svm:
+#   # C: [0.001, 0.01, 0.1, 1] # regularisation strength
+#   c_svm__C: [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0]
+#   # kernel: ['linear', 'poly', 'rbf', 'sigmoid'] # kernel function
+#   c_svm__kernel: ['rbf']
+#   # degree: [2, 3, 4, 5, 6] # degree of the polynomial kernel function
+#   # c_svm__degree: [3]
+#   c_svm__gamma: ['scale'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
 
 # c_svm:
 #   # C: [0.001, 0.01, 0.1, 1] # regularisation strength
