@@ -87,7 +87,7 @@ def get_scores_cv(
         swap_axes=False,
         features_to_drop=None,
         shuffle=True,
-        random_state=42,
+        random_state=114514,
     )
 
     # music data returns an iterator of dictionaries
@@ -106,6 +106,11 @@ def get_scores_cv(
     confusion_matrices_train = []
     classification_reports_test = []
     confusion_matrices_test = []
+    
+    # if reduction_method is not None:
+    #     raise SystemExit("Reduction method not implemented yet")
+    # else:
+    #     n_components = None
 
     for data_dict in all_data:
         # extract the already preprocessed data
@@ -133,12 +138,12 @@ def get_scores_cv(
             new_best_params["max_epochs"] = 500
             new_best_params["criterion"] = torch.nn.CrossEntropyLoss
             new_best_params["optimizer"] = torch.optim.AdamW
+            new_best_params["lr"] = 0.001
             new_best_params["train_split"] = predefined_split(MusicData(X_test, y_test))
-            
             checkpoint_dir = f"checkpoints/{best_params}_{reduction_method}_{n_components}"
             
             # callbacks
-            es = EarlyStopping(patience=20)
+            es = EarlyStopping(patience=50)
             cp = Checkpoint(dirname=checkpoint_dir, monitor='valid_acc_best')
             
             new_best_params["callbacks"] = [
@@ -146,6 +151,7 @@ def get_scores_cv(
                 cp,
             ]
             new_best_params["device"] = "cpu"
+            new_best_params["verbose"] = 0
 
             model = METHOD_DICT[method](**new_best_params)
             
@@ -233,6 +239,7 @@ def main():
             if _red_method == "none":
                 logging.info("No reduction method")
                 red_method = None
+                n_components = 0
             else:
                 red_method = _red_method.split("_")[0]
                 n_components = int(_red_method.split("_")[-1])
