@@ -15,10 +15,10 @@
 #   logistic_regression__solver: ['lbfgs']  # solver for optimisation
 
 
-mlp:
-  mlp__hidden_dims: [[384, 64], [256, 64], [64, 64]]
-  mlp__dropout: [0.2, 0.5]
-  mlp__activation: ['relu']
+# mlp:
+#   mlp__hidden_dims: [[384, 64], [256, 64], [64, 64]]
+#   mlp__dropout: [0.2, 0.5]
+#   mlp__activation: ['relu']
 
 # xgboost_rf:
 #   # learning_rate: [0.1]
@@ -41,14 +41,14 @@ mlp:
 
 
 
-# c_svm:
-#   # C: [0.001, 0.01, 0.1, 1] # regularisation strength
-#   c_svm__C: [0.1, 1.0, 2.0]
-#   # kernel: ['linear', 'poly', 'rbf', 'sigmoid'] # kernel function
-#   c_svm__kernel: ['poly', 'rbf']
-#   degree: [2, 3, 4, 5, 6] # degree of the polynomial kernel function
-#   # c_svm__degree: [3]
-#   c_svm__gamma: ['scale', 'auto'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
+c_svm:
+  # C: [0.001, 0.01, 0.1, 1] # regularisation strength
+  c_svm__C: [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0]
+  # kernel: ['linear', 'poly', 'rbf', 'sigmoid'] # kernel function
+  c_svm__kernel: ['rbf']
+  # degree: [2, 3, 4, 5, 6] # degree of the polynomial kernel function
+  # c_svm__degree: [3]
+  c_svm__gamma: ['scale'] # kernel coefficient for 'rbf', 'poly', and 'sigmoid'
 
 # c_svm:
 #   # C: [0.001, 0.01, 0.1, 1] # regularisation strength
