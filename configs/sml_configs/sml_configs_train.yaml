@@ -20,16 +20,13 @@
 #   mlp__module__dropout: [0.2, 0.5]
 #   # mlp__activation: ['relu']
 
-# xgboost_rf:
-#   # learning_rate: [0.1]
-#   # subsample: [0.5]
-#   # colsample_bynode: [0.2]
-#   xgboost_rf__learning_rate: [0.01] # step size shrinkage used in each boosting iteration
-#   xgboost_rf__n_estimators: [100, 200] # number of trees
-#   xgboost_rf__max_depth: [3, 5] # max tree depth
-#   xgboost_rf__subsample: [0.1, 0.3, 0.5] # fraction of samples used for fitting each tree
-#   xgboost_rf__colsample_bynode: [0.1, 0.3, 0.5] # fraction of features used for fitting each tree
-  # xgboost_rf__gamma: [0, 0.1, 0.2] # Minimum loss reduction required to make a further partition on a leaf node of the tree.
+xgboost_rf:
+  xgboost_rf__learning_rate: [0.01] # step size shrinkage used in each boosting iteration
+  xgboost_rf__n_estimators: [100] # number of trees
+  xgboost_rf__max_depth: [5] # max tree depth
+  xgboost_rf__subsample: [0.1, 0.3, 0.5] # fraction of samples used for fitting each tree
+  xgboost_rf__colsample_bynode: [0.1, 0.3, 0.5] # fraction of features used for fitting each tree
+  xgboost_rf__gamma: [0, 0.1, 0.2] # Minimum loss reduction required to make a further partition on a leaf node of the tree.
 
 # random_forest:
 #   random_forest__n_estimators: [100, 200, 300] # number of trees in the forest

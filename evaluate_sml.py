@@ -73,11 +73,11 @@ def main():
     # deprecated for mlp
     methods_list = [
         # "mlp",
-        "c_svm",
-        "naive_bayes",
+        # "c_svm",
+        # "naive_bayes",
         "knn",
-        "lda",
-        "qda",
+        # "lda",
+        # "qda",
         # "xgboost_rf",
     ]
 
