@@ -40,13 +40,14 @@ def get_top_dirs():
 
     reduction_methods = ["mrmr", "igr", "pca"]
 
-    num_components = [7, 50, 100, 250]
+    # num_components = [7, 50, 100, 250]
+    num_components = [350]
 
     # top directories to save the output
     top_dirs = []
 
     # add LDA
-    top_dirs.append(os.path.join(base_dir, "lda_7"))
+    # top_dirs.append(os.path.join(base_dir, "lda_7"))
 
     # add no reduction
     # top_dirs.append(os.path.join(base_dir, "none"))
@@ -73,9 +74,9 @@ def main():
     # deprecated for mlp
     methods_list = [
         # "mlp",
-        # "c_svm",
+        "c_svm",
         # "naive_bayes",
-        "knn",
+        # "knn",
         # "lda",
         # "qda",
         # "xgboost_rf",
