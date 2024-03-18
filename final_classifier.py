@@ -39,6 +39,7 @@ model.fit(X_reduced, y)
 
 ### produce predictions on X_test  ###
 y_pred = model.predict(X_test_reduced)
+y_pred = label_encoder.inverse_transform(y_pred)
 prediction = pd.DataFrame(y_pred, columns=['Genre'])
 prediction.index.name='Id'
 prediction.to_csv('data/myprediction.csv') # export to csv file
