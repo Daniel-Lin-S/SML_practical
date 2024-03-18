@@ -9,3 +9,12 @@ notebooks/
 reports/
 # regex that contains output
 output.*
+best_params*
+*.npz
+*.txt
+*.pt
+*.json
+*.html
+*.pkl
+*.npz
+*.pth

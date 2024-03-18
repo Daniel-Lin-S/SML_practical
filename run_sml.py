@@ -1,5 +1,5 @@
 """
-Run the entire pipeline.
+Run the entire pipeline for grid search.
 """
 
 import os
@@ -8,11 +8,18 @@ import logging
 import argparse
 from packaging.version import Version
 
+import torch
+
 import sklearn
 from sklearn.metrics import classification_report
 
-from src.data_utils import MusicDataset
+from skorch.helper import predefined_split
+from skorch.callbacks import EarlyStopping, Checkpoint
+
 from src.sml_model import *
+from src.nn_model import MLP
+from src.dataloader import MusicData
+from src.data_utils import MusicDataset, CustomDimReduction
 
 # paths to the data
 PATH_to_X = "data/X_train.csv"
@@ -35,13 +42,11 @@ TIME = time.strftime("%Y-%m-%d_%H-%M-%S")
 
 if Version(sklearn.__version__) < Version("1.2"):
     KWARGS_FOR_GRID_SEARCH = {
-        "l_svm": {"max_iter": 5000},
         "xgboost_rf": {"random_state": 42},
         "adaboost": {"base_estimator": DecisionTreeClassifier()},
     }
 else:
     KWARGS_FOR_GRID_SEARCH = {
-        "l_svm": {"max_iter": 5000},
         "xgboost_rf": {"random_state": 42},
         "adaboost": {"estimator": DecisionTreeClassifier()},
     }
@@ -125,7 +130,7 @@ def main():
     parser.add_argument(
         "--n_jobs",
         type=int,
-        default=1,
+        default=-1,
         help="The number of jobs to run in parallel, default is all cores",
     )
 
@@ -135,7 +140,7 @@ def main():
         default=False,
         help="Whether or not to use the feature drop for first two features",
     )
-    
+
     parser.add_argument(
         "--device",
         type=str,
@@ -156,7 +161,7 @@ def main():
         path_to_y=PATH_to_y,
         test_size=args.test_size,
         random_state=args.random_state,
-        shuffle=args.shuffle,
+        shuffle=False,
         features_to_drop=features_to_drop,
         swap_axes=False,
     )
@@ -180,10 +185,22 @@ def main():
         scaler=None,
         reduction_method=None,
     )
-
-    print(
-        f"Sanity check of shapes: {X_train.shape}, {X_test.shape}, {y_train.shape}, {y_test.shape}"
-    )
+    
+    # save the train and test data for later evaluation
+    if not os.path.exists("cv_data"):
+        os.makedirs("cv_data")
+        
+    if isinstance(X_train, pd.DataFrame):
+        X_train.to_csv("cv_data/X_train.csv", index=False)
+        X_test.to_csv("cv_data/X_test.csv", index=False)
+        
+    else:
+        np.savetxt("cv_data/X_train.csv", X_train, delimiter=",")
+        np.savetxt("cv_data/X_test.csv", X_test, delimiter=",")
+        
+    # since y has been passed through label encoder, it is np.ndarray
+    np.savetxt("cv_data/y_train.csv", y_train, delimiter=",")
+    np.savetxt("cv_data/y_test.csv", y_test, delimiter=",")
 
     best_params = {}
 
@@ -200,13 +217,54 @@ def main():
             kwargs = KWARGS_FOR_GRID_SEARCH[model_name]
         else:
             kwargs = {}
-        
+
         # torch wrapper requires the input dimension
         if model_name == "mlp":
-            if reduction_method is None:
-                kwargs["input_dim"] = X_train.shape[1]
+            # set to numpy float 32
+            mlp_dataset = MusicDataset(
+                path_to_X=PATH_to_X,
+                path_to_y=PATH_to_y,
+                test_size=0.2,
+                random_state=args.random_state,
+                shuffle=args.shuffle,
+                features_to_drop=features_to_drop,
+                swap_axes=False,
+            )
+
+            X_train, X_test, y_train, y_test = mlp_dataset.get_data(
+                scaler=None,
+                reduction_method=None,
+            )
+
+            if isinstance(X_train, pd.DataFrame):
+                feature_columns = X_train.columns
             else:
-                kwargs["input_dim"] = args.n_components
+                raise ValueError("X_train must be a pandas DataFrame")
+
+            if not isinstance(X_train, np.ndarray):
+                X_train = X_train.to_numpy().astype(np.float32)
+                X_test = X_test.to_numpy().astype(np.float32)
+
+            if reduction_method is None:
+                kwargs["module__input_dim"] = X_train.shape[1]
+
+                # set the torch dataset for validation
+                validation_set = MusicData(X_test, y_test)
+                kwargs["train_split"] = predefined_split(validation_set)
+            else:
+                kwargs["module__input_dim"] = args.n_components
+
+            kwargs["module"] = MLP
+            kwargs["max_epochs"] = 500
+            kwargs["verbose"] = 0
+            kwargs["criterion"] = torch.nn.CrossEntropyLoss
+            kwargs["optimizer"] = torch.optim.AdamW
+            kwargs["device"] = args.device
+            
+        if isinstance(X_train, pd.DataFrame):
+            feature_columns = X_train.columns
+        else:
+            feature_columns = None
 
         logging.info(f"The parameters for model {model_name} are {kwargs}")
         logging.info(f"Running grid search for model {model_name}")
@@ -221,10 +279,11 @@ def main():
             scoring=args.scoring,
             n_jobs=args.n_jobs,
             ignore_warnings=True,
-            verbose=3,
+            sk_verbose=3,
             scaling_method=scaling_method,
             reduction_method=reduction_method,
             n_components=args.n_components,
+            feature_columns=feature_columns,
             **kwargs,
         )
 
@@ -257,10 +316,10 @@ def main():
             # get train accuracy
             file.write(f"Train report \n")
             file.write(report_train)
-            
+
             # also write the time
             file.write("\n")
-            file.write(f"="*50)
+            file.write(f"=" * 50)
             file.write(f"\nTime taken: {time_elapsed} seconds\n")
 
         logging.info(f"Report for model {model_name} has been written")

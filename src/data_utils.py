@@ -37,7 +37,7 @@ class MusicDataset:
         path_to_y="data/y_train.csv",
         test_size=0.2,
         random_state=42,
-        shuffle=False,
+        shuffle=True,
         swap_axes=False,
         features_to_drop=None,
     ):
@@ -157,7 +157,7 @@ class MusicDataset:
             - X_test: The test input data
             - y_train: The training target data
             - y_test: The test target data
-            - method: The dimensionality reduction method (pca, lda, mrmr), can be None
+            - method: The dimensionality reduction method (pca, lda, mrmr, igr), can be None
             - n_components: The number of components to keep
 
         Returns:
@@ -182,6 +182,13 @@ class MusicDataset:
             reducer = LinearDiscriminantAnalysis(n_components=n_components)
             reducer.fit(X_train, y_train)
 
+            X_train_reduced = reducer.transform(X_train)
+            X_test_reduced = reducer.transform(X_test)
+            
+        elif method == "igr":
+            reducer = SelectKBest(mutual_info_classif, k=n_components)
+            reducer.fit(X_train, y_train)
+            
             X_train_reduced = reducer.transform(X_train)
             X_test_reduced = reducer.transform(X_test)
 
@@ -281,7 +288,7 @@ class MusicDataset:
         else:
             print(f"Using {k_fold_splits}-fold cross-validation.")
             if use_all_data:
-                X_to_use = self.X
+                X_to_use = self.X_raw
                 y_to_use = self.y
             else:
                 X_to_use = self.X_train
@@ -389,10 +396,11 @@ class CustomDimReduction(BaseEstimator, TransformerMixin):
     A class for dimensionality reduction using PCA or LDA or or IGR or mRMR.
     """
 
-    def __init__(self, method, n_components, feature_columns=None):
+    def __init__(self, method, n_components, feature_columns=None, dtype=np.float32):
         self.method = method
         self.n_components = n_components
         self.feature_columns = feature_columns
+        self.dtype = dtype
 
         if feature_columns is None and method == "mrmr":
             raise ValueError("feature_columns must be provided for mRMR method")
@@ -411,7 +419,7 @@ class CustomDimReduction(BaseEstimator, TransformerMixin):
         elif self.method is None:
             self.reducer = None
         else:
-            raise ValueError("Invalid reduction method. Use 'pca' or 'lda' or 'mrmr'.")
+            raise ValueError(f"Invalid reduction method {self.method}. Use 'pca' or 'lda' or 'mrmr'.")
 
         self.reducer.fit(X, y)
         return self
@@ -420,4 +428,7 @@ class CustomDimReduction(BaseEstimator, TransformerMixin):
         if self.method is None:
             return X
         else:
-            return self.reducer.transform(X)
+            if self.dtype is not None:
+                return self.reducer.transform(X).astype(self.dtype)
+            else:
+                return self.reducer.transform(X)

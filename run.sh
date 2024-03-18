@@ -11,22 +11,26 @@ pip install --user -r requirements.txt
 base_dir="configs/sml_configs"
 
 #device
+device="cpu" # cuda or cpu or mps (if using Mac with M1 or newer)
+
+# Number of jobs to run in parallel
+n_jobs=-1 # 1 or -1
+
 
 # Ensure the base directory exists
 mkdir -p "$base_dir"
 
 # Loop through reduce_method options
-for reduce_method in lda pca igr mrmr none; do # lda pca none mrmr igr
+for reduce_method in igr mrmr pca; do # lda pca none mrmr igr
     # Define n_components array based on the reduce_method
     if [ "$reduce_method" = "pca" ]; then
-        declare -a n_components=(7 20 50 100 250)
-        # declare -a n_components=(5)
+        declare -a n_components=(350)
     elif [ "$reduce_method" = "lda" ]; then
         declare -a n_components=(7)
     elif [ "$reduce_method" = "igr" ]; then
-        declare -a n_components=(7 20 50 100 250)
+        declare -a n_components=(350) #7 50 100 250)
     elif [ "$reduce_method" = "mrmr" ]; then
-        declare -a n_components=(7 20 50 100 250)
+        declare -a n_components=(350)
     else
         # For 'none', we don't need to specify n_components, but we'll run it once for consistency
         declare -a n_components=(none)
@@ -48,11 +52,11 @@ for reduce_method in lda pca igr mrmr none; do # lda pca none mrmr igr
         
         # Run the script with the current set of parameters
         if [ "$reduce_method" = "none" ]; then
-            echo "Running: python run_sml.py --reduce_method $reduce_method --output_dir $output_dir"
-            python run_sml.py --reduce_method "$reduce_method" --output_dir "$output_dir"
+            echo "Running: python run_sml.py --reduce_method $reduce_method --output_dir $output_dir" --device $device --n_jobs $n_jobs
+            python run_sml.py --reduce_method "$reduce_method" --output_dir "$output_dir" --device $device --n_jobs $n_jobs
         else
-            echo "Running: python run_sml.py --reduce_method $reduce_method --n_components $n --output_dir $output_dir"
-            python run_sml.py --reduce_method "$reduce_method" --n_components "$n" --output_dir "$output_dir"
+            echo "Running: python run_sml.py --reduce_method $reduce_method --n_components $n --output_dir $output_dir" --device $device --n_jobs $n_jobs
+            python run_sml.py --reduce_method "$reduce_method" --n_components "$n" --output_dir "$output_dir" --device $device --n_jobs $n_jobs
         fi
     done
 done

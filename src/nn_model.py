@@ -3,6 +3,7 @@
 import enum
 import math
 import torch
+import skorch
 import numpy as np
 
 
@@ -16,6 +17,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from src.dataloader import MusicData
 from src.data_utils import MusicDataset
 from src.train_nn import *
+import torch
 
 
 class PatchEmbedding(nn.Module):
@@ -98,14 +100,14 @@ class MLP(nn.Module):
     def __init__(
         self,
         input_dim,
-        output_dim,
-        n_groups,
-        n_features_per_group,
-        n_embed_dim,
+        output_dim=8,
+        n_groups=11,
+        n_features_per_group=[84, 84, 84, 140, 7, 7, 7, 49, 7, 42, 7],
+        n_embed_dim=8,
         hidden_dims=[32, 64, 128],
         dropout=0.0,
-        activation="tanh",
-        use_patch_embedding=True,
+        activation="relu",
+        use_patch_embedding=False,
     ):
         """
         Initializes the MLP model.
@@ -671,6 +673,207 @@ class GroupedFeaturesTransformer(nn.Module):
         # Classifier
         x = self.classifier(x)
         return x
+    
+    
+
+class ConvVAE(nn.Module):
+    """Implementation of Convolutional VAE model."""
+    def __init__(self, 
+                 latent_dim = 8, 
+                dropout = 0.0,
+                 hidden_dims = [64, 32]):
+        """
+        Initializes the VAE model.   
+        
+        Args:  
+            - input_dim (int): Dimensionality of input features.
+            - latent_dim (int): Dimensionality of the latent space.
+            - dropout (float): Dropout rate.
+            - hidden_dims (list): List of integers representing the sizes of hidden layers.
+        """
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Conv2d(1,32,3,padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Conv2d(32,64,3,padding=1,stride=2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.Conv2d(64,64,3,padding=1,stride=2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.Flatten()
+        )
+        
+        self.fc_mu = nn.Linear(64*7*7,latent_dim)
+        self.fc_var = nn.Linear(64*7*7,latent_dim) 
+        
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim,64*7*7),
+            nn.Unflatten(1,(64,7,7)),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64,64,3,padding=1,output_padding=1,stride=2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64,32,3,padding=1,output_padding=1,stride=2),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.ConvTranspose2d(32, 1, 3, padding=1),
+            nn.Tanh()
+        )
+        
+        self.latent = torch.empty(latent_dim)
+        self.mu = None
+        self.log_var = None
+        
+    def _reparametrize(self, mu, logvar):
+        """
+        Reparameterization trick to sample from N(mu, var) from N(0,1).
+        """
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    
+    
+    def forward(self, x):
+        """
+        Defines the forward pass of the VAE.
+        Returns:  
+            - x (torch.Tensor): The decoded output tensor.
+            - z (torch.Tensor): The latent space tensor.
+            - mu (torch.Tensor): The mean of the latent space.
+            - logvar (torch.Tensor): The log-variance of the latent space.
+        """
+        latents = self.encoder(x)
+        
+        mu = self.fc_mu(latents)
+        
+        logvar = self.fc_var(latents)
+        
+        
+        z = self._reparametrize(mu, logvar)
+        
+        x = self.decoder(z)
+        
+        # store the latent space
+        self.mu = mu
+        self.logvar = logvar
+        return x
+    
+    def sample_latents(self, x):
+        """Sample from the latent space."""
+        mu, logvar = torch.chunk(self.encoder(x), 2, dim=-1)
+        z = self._reparametrize(mu, logvar)
+        return z
+    
+    
+
+class BetaVAE(nn.Module):
+    """Implementation of BetaVAE model."""
+    def __init__(self, 
+                 input_dim, 
+                 latent_dim = 8, 
+                #  activation = "relu",
+                dropout = 0.0,
+                 hidden_dims = [64, 32]):
+        """
+        Initializes the VAE model.   
+        
+        Args:  
+            - input_dim (int): Dimensionality of input features.
+            - latent_dim (int): Dimensionality of the latent space.
+            - dropout (float): Dropout rate.
+            - hidden_dims (list): List of integers representing the sizes of hidden layers.
+        """
+        super().__init__()
+        
+        self.input_dim = input_dim
+        self.latent_dim = latent_dim
+        self.dropout = dropout
+        
+        self.before_latent_dim = latent_dim * 2
+        
+        self.encoder_hidden_dims = [input_dim] + hidden_dims
+        self.decoder_hidden_dims = [latent_dim] + hidden_dims[::-1]
+        
+        encoder_layers = []
+        decoder_layers = []
+        
+        # Encoder
+        for i in range(len(self.encoder_hidden_dims) - 1):
+            encoder_layers.append(nn.Linear(self.encoder_hidden_dims[i], self.encoder_hidden_dims[i + 1]))
+            encoder_layers.append(nn.ReLU())
+            if self.dropout > 0:
+                encoder_layers.append(nn.Dropout(dropout))
+        self.encoder = nn.Sequential(*encoder_layers)
+        
+        # Encoder to mu and logvar
+        self.fc_mu = nn.Linear(hidden_dims[-1],latent_dim)
+        
+        # require nonnegative logvar
+        self.fc_var = nn.Linear(hidden_dims[-1],latent_dim)
+        
+        # Decoder
+        for i in range(len(self.decoder_hidden_dims) - 1):
+            # before the output
+            decoder_layers.append(nn.Linear(self.decoder_hidden_dims[i], self.decoder_hidden_dims[i + 1]))
+            decoder_layers.append(nn.ReLU())
+            if self.dropout > 0:
+                decoder_layers.append(nn.Dropout(dropout))
+        # output layer
+        decoder_layers.append(nn.Linear(self.decoder_hidden_dims[-1], 
+                                        self.input_dim))
+                
+        self.decoder = nn.Sequential(*decoder_layers)
+        
+        self.mu = None
+        self.logvar = None
+        
+    def _reparametrize(self, mu, logvar):
+        """
+        Reparameterization trick to sample from N(mu, var) from N(0,1).
+        """
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+    
+    
+    def forward(self, x):
+        """
+        Defines the forward pass of the VAE.
+        Returns:  
+            - x (torch.Tensor): The decoded output tensor.
+            - z (torch.Tensor): The latent space tensor.
+            - mu (torch.Tensor): The mean of the latent space.
+            - logvar (torch.Tensor): The log-variance of the latent space.
+        """
+        # check and reshape
+
+        all_latents = self.encoder(x)
+        
+        mu = self.fc_mu(all_latents)
+        logvar = self.fc_var(all_latents)
+        
+        z = self._reparametrize(mu, logvar)
+        x = self.decoder(z)
+        
+        # store the latent space
+        self.mu = mu
+        self.logvar = logvar
+        return x
+    
+    def extract_mean(self, x):
+        """Extract the mean of the latent space."""
+        all_latents = self.encoder(x)
+        mu = self.fc_mu(all_latents)
+        return mu
+    
+    def extract_logvar(self, x):
+        """Extract the logvar of the latent space."""
+        all_latents = self.encoder(x)
+        logvar = self.fc_var(all_latents)
+        return logvar
+
 
 class SklearnWrappedMLP(BaseEstimator, ClassifierMixin):
     """
@@ -799,3 +1002,5 @@ class SklearnWrappedMLP(BaseEstimator, ClassifierMixin):
     def score(self, X, y):
         predictions = self.predict(X)
         return np.mean(predictions == y)
+    
+    
