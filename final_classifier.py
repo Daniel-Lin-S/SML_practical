@@ -24,6 +24,7 @@ X_test_scaled = scaler.transform(X_test)
 
 ### perform feature selection based on MRMR score ###
 n_dim = 250
+X_scaled = pd.DataFrame(data=X_scaled, columns=X.columns)
 selected_columns = mrmr_classif(X_scaled, y, K=n_dim)
 X_reduced = X_scaled[selected_columns]
 X_test_reduced = X_test_scaled[selected_columns]
