@@ -91,3 +91,36 @@ for label in np.unique(y):
     # Perform Kolmogorov-Smirnov Test 
     stat, p = kstest(X_class, 'norm')
     print(f"Genre {label}: Shapiro-Wilk test statistic = {stat}, p-value = {p}")
+
+
+### Plot TSNE to visualise the classes and check the performances of different dimension reductions ###
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+### LDA reduction
+LDA_model = LinearDiscriminantAnalysis()
+LDA_model.fit(X, y)
+X_LDA = LDA_model.transform(X_scaled)
+
+def plot_TSNE(X_reduced, path):
+    """
+    use t-SNE to visualise the reduced dataset 
+    """
+
+    # Assuming X_train is your high-dimensional data and y_train are the labels
+    X_embedded = TSNE(n_components=2, random_state=42).fit_transform(X_reduced)
+    fig, ax = plt.subplots(figsize=(10, 10))
+
+    # Create a scatter plot, coloring the points based on y_train labels
+    for label in np.unique(y):
+        # Find points with this label
+        indices = np.where(y == label)
+        # Plot these points with a label
+        ax.scatter(X_embedded[indices, 0], X_embedded[indices, 1], label=label, alpha=0.5)
+
+    ax.legend()
+    ax.set_xlabel('Component 1')
+    ax.set_ylabel('Component 2')
+    plt.savefig(path, dpi=300)
+
+plot_TSNE(X_LDA, 'figures/tsne_lda.png')
